@@ -13,3 +13,9 @@ def test_dockerfile_pins_acestep_commit():
     text = (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8")
     assert "ca1e85fe9430179831e6bc6be790c332190a3866" in text
     assert "uv sync --frozen --no-dev --python 3.11" in text
+
+
+def test_build_script_uses_lf():
+    data = (ROOT / "scripts" / "build_and_push.sh").read_bytes()
+    assert data.startswith(b"#!/usr/bin/env bash\n")
+    assert b"\r\n" not in data
