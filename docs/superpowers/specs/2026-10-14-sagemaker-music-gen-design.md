@@ -50,6 +50,7 @@ C:\dev\runiverse\ai\
 │  ├─ storage.py
 │  └─ app.py
 ├─ scripts/
+│  ├─ deploy_config.py               # envs/<env>.yaml 로더·검증 (스크립트 공용)
 │  ├─ download_models.py             # HF → S3 model.tar.gz
 │  ├─ build_and_push.sh              # 이미지 → ECR
 │  ├─ deploy.py                      # --env dev
@@ -100,6 +101,7 @@ C:\dev\runiverse\ai\
 | 요청 | `s3://<bucket>/music/requests/{request_id}.json` |
 | 음원 | `s3://<bucket>/music/outputs/{request_id}/{request_id}.wav` |
 | 응답 | `s3://<bucket>/music/responses/` (SageMaker 관리) |
+| 실패 | `s3://<bucket>/music/failures/` (SageMaker 관리) |
 
 **핵심 결정**
 - 호출 방식: **Async** — 60초 응답 제한 없음, 인스턴스 0대 축소 가능
