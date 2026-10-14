@@ -152,7 +152,7 @@ C:\dev\runiverse\ai\
 
 | 키 | 기본값 |
 |---|---|
-| `region` | `ap-northeast-2` |
+| `region` | `ap-northeast-2` (서울) |
 | `endpoint_name` | `runiverse-music-dev` |
 | `instance_type` | `ml.g4dn.xlarge` (T4 16GB, Colab 검증 GPU와 동일) |
 | `autoscaling` | min 0 / max 1 |
@@ -276,9 +276,11 @@ manifest에 기록:
 
 ## ❓ 11. 가정과 미결 사항
 
+**확정**
+- 리전 = 서울 `ap-northeast-2` (S3·ECR·SageMaker·SNS·CloudWatch 모두 동일 리전)
+
 **가정**
 - 호출 주체 = Spring Boot 백엔드
-- 리전 = `ap-northeast-2`
 - dev 최대 길이 = 120초
 
 **미결 (실제 AWS 리소스 필요)**

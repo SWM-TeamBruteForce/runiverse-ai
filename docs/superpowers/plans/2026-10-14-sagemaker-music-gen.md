@@ -16,7 +16,8 @@
 - 컨테이너: 8080 포트, `GET /ping`, `POST /invocations`, 워커 1개
 - 배포 환경 고정값: `GENERATOR=acestep`, `STORAGE=s3` (다른 값이면 배포 거부)
 - S3 경로: `music/models/ace-step-1.5/{rev}/model.tar.gz`, `music/requests/{id}.json`, `music/outputs/{id}/{id}.wav`, `music/responses/`, `music/failures/`
-- 인스턴스 `ml.g4dn.xlarge`, 오토스케일링 min 0 / max 1, 리전 `ap-northeast-2`
+- 인스턴스 `ml.g4dn.xlarge`, 오토스케일링 min 0 / max 1
+- 리전: 서울 `ap-northeast-2` — S3·ECR·SageMaker·SNS·CloudWatch 모두 동일 리전, Grafana CloudWatch 데이터 소스 기본 리전도 동일
 - CPU 대체 금지 — CUDA 없으면 시작 실패
 - 로컬 Python 코드는 3.11 문법까지만 사용 (컨테이너 3.11)
 - 커밋 메시지: `✨ Feat:` / `🔧 Chore:` / `📝 Docs:` 접두어 + 세션 트레일러
@@ -1457,7 +1458,7 @@ git commit -m "✨ Feat: SageMaker BYOC 컨테이너"
 
 ```yaml
 # runiverse-music dev 배포 설정 — deploy.py 실행 시 읽음 (값 변경 후 재배포만 하면 반영)
-region: ap-northeast-2
+region: ap-northeast-2      # 서울
 endpoint_name: runiverse-music-dev
 ecr_repository: runiverse-music
 instance_type: ml.g4dn.xlarge
