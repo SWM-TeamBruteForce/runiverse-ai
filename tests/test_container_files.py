@@ -19,3 +19,9 @@ def test_build_script_uses_lf():
     data = (ROOT / "scripts" / "build_and_push.sh").read_bytes()
     assert data.startswith(b"#!/usr/bin/env bash\n")
     assert b"\r\n" not in data
+
+
+def test_dockerfile_disables_uv_cache():
+    # uv 캐시가 이미지에 남으면 torch 휠이 이중 저장돼 0→1 콜드 스타트가 길어진다
+    text = (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8")
+    assert "UV_NO_CACHE=1" in text

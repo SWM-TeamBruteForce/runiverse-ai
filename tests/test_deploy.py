@@ -28,17 +28,21 @@ def make_cfg(**over):
 
 
 class FakeClient:
-    def __init__(self, responses=None, errors=None):
+    """responses[name]: dict·예외 하나, 또는 호출 순서대로 쓸 목록(마지막 값 반복)."""
+
+    def __init__(self, responses=None):
         self.calls = []
         self.responses = responses or {}
-        self.errors = errors or {}
 
     def __getattr__(self, name):
         def method(**kwargs):
             self.calls.append((name, kwargs))
-            if name in self.errors:
-                raise self.errors[name]
-            return self.responses.get(name, {})
+            value = self.responses.get(name, {})
+            if isinstance(value, list):
+                value = value.pop(0) if len(value) > 1 else value[0]
+            if isinstance(value, Exception):
+                raise value
+            return value
         return method
 
     def get_waiter(self, name):
@@ -117,29 +121,58 @@ def test_scaling_requests():
     assert alarm["AlarmActions"] == ["arn:policy"]
 
 
+NAME = "runiverse-music-dev-abc123def456-20261014120000"
+NOT_FOUND = client_error("ValidationException", "DescribeEndpoint")
+APPLIED = {"EndpointStatus": "InService", "EndpointConfigName": NAME}
+
+
+def scaling_client():
+    return FakeClient({
+        "put_scaling_policy": {"PolicyARN": "arn:policy"},
+        "deregister_scalable_target": client_error("ObjectNotFoundException", "Deregister"),
+    })
+
+
 def test_deploy_creates_new_endpoint():
-    sm = FakeClient(errors={"describe_endpoint": client_error("ValidationException", "DescribeEndpoint")})
-    aas = FakeClient(responses={"put_scaling_policy": {"PolicyARN": "arn:policy"}})
+    sm = FakeClient({"describe_endpoint": [NOT_FOUND, APPLIED]})
+    aas = scaling_client()
     cw = FakeClient()
-    name = deploy.deploy(make_cfg(), IMAGE, sm, aas, cw, NOW)
-    assert name == "runiverse-music-dev-abc123def456-20261014120000"
+    assert deploy.deploy(make_cfg(), IMAGE, sm, aas, cw, NOW) == NAME
     assert [c[0] for c in sm.calls] == [
-        "create_model", "create_endpoint_config", "describe_endpoint", "create_endpoint", "get_waiter", "wait",
+        "create_model", "create_endpoint_config", "describe_endpoint", "create_endpoint",
+        "get_waiter", "wait", "describe_endpoint",
     ]
     assert [c[0] for c in aas.calls] == ["register_scalable_target", "put_scaling_policy", "put_scaling_policy"]
     assert cw.calls[0][1]["AlarmActions"] == ["arn:policy"]
 
 
 def test_deploy_updates_existing_endpoint():
-    sm = FakeClient()
-    aas = FakeClient(
-        responses={"put_scaling_policy": {"PolicyARN": "arn:policy"}},
-        errors={"deregister_scalable_target": client_error("ObjectNotFoundException", "Deregister")},
-    )
+    sm = FakeClient({"describe_endpoint": [{"EndpointStatus": "InService", "EndpointConfigName": "old"}, APPLIED]})
+    aas = scaling_client()
     deploy.deploy(make_cfg(), IMAGE, sm, aas, FakeClient(), NOW)
     names = [c[0] for c in sm.calls]
     assert "update_endpoint" in names and "create_endpoint" not in names
     assert aas.calls[0][0] == "deregister_scalable_target"
+
+
+def test_deploy_detects_rolled_back_update():
+    # 갱신 실패 시 SageMaker는 이전 설정으로 되돌리고 InService + FailureReason을 남긴다
+    rolled_back = {"EndpointStatus": "InService", "EndpointConfigName": "old", "FailureReason": "ping timeout"}
+    sm = FakeClient({"describe_endpoint": [{"EndpointStatus": "InService", "EndpointConfigName": "old"}, rolled_back]})
+    aas = scaling_client()
+    with pytest.raises(deploy.DeploymentError, match="ping timeout"):
+        deploy.deploy(make_cfg(), IMAGE, sm, aas, FakeClient(), NOW)
+    # 롤백된 엔드포인트에도 오토스케일링은 다시 걸어 둔다
+    assert "register_scalable_target" in [c[0] for c in aas.calls]
+
+
+def test_deploy_recreates_failed_endpoint():
+    sm = FakeClient({"describe_endpoint": [{"EndpointStatus": "Failed", "EndpointConfigName": "old"}, APPLIED]})
+    deploy.deploy(make_cfg(), IMAGE, sm, scaling_client(), FakeClient(), NOW)
+    names = [c[0] for c in sm.calls]
+    assert "update_endpoint" not in names
+    assert names.index("delete_endpoint") < names.index("create_endpoint")
+    assert ("get_waiter", {"name": "endpoint_deleted"}) in sm.calls
 
 
 def test_main_rejects_unfilled_config(capsys):

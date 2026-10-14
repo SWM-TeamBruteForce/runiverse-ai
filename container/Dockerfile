@@ -6,10 +6,12 @@ ARG ACESTEP_COMMIT=ca1e85fe9430179831e6bc6be790c332190a3866
 ARG ACESTEP_REPO=https://github.com/ace-step/ACE-Step-1.5.git
 ARG IMAGE_TAG=local
 
+# UV_NO_CACHE: 캐시가 이미지에 남으면 휠이 이중 저장돼 이미지·콜드 스타트가 커진다
 ENV DEBIAN_FRONTEND=noninteractive \
     UV_PYTHON_INSTALL_DIR=/opt/uv-python \
     UV_LINK_MODE=copy \
-    UV_COMPILE_BYTECODE=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_NO_CACHE=1
 
 RUN apt-get update \
  && apt-get install -y --no-install-recommends git ca-certificates ffmpeg libsndfile1 \

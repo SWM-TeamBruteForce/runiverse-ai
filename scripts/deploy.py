@@ -146,15 +146,19 @@ def build_wake_alarm(cfg: DeployConfig, policy_arn: str) -> dict:
     }
 
 
-def endpoint_exists(sm, name: str) -> bool:
+class DeploymentError(RuntimeError):
+    """엔드포인트가 새 설정으로 바뀌지 않음."""
+
+
+def endpoint_status(sm, name: str) -> str | None:
+    """엔드포인트 상태. 없으면 None."""
     from botocore.exceptions import ClientError
 
     try:
-        sm.describe_endpoint(EndpointName=name)
-        return True
+        return sm.describe_endpoint(EndpointName=name)["EndpointStatus"]
     except ClientError as exc:
         if exc.response["Error"]["Code"] == "ValidationException":
-            return False
+            return None
         raise
 
 
@@ -179,7 +183,17 @@ def deploy(cfg: DeployConfig, image_uri: str, sm, aas, cw, now: datetime) -> str
     name = resource_name(cfg, image_uri, now)
     sm.create_model(**build_model_request(cfg, name, image_uri))
     sm.create_endpoint_config(**build_endpoint_config_request(cfg, name, name))
-    if endpoint_exists(sm, cfg.endpoint_name):
+    status = endpoint_status(sm, cfg.endpoint_name)
+    if status == "Failed":
+        # Failed 엔드포인트는 갱신할 수 없어 지우고 새로 만든다
+        print(f"{cfg.endpoint_name}이 Failed 상태라 삭제 후 다시 만듭니다.", flush=True)
+        remove_autoscaling(aas, cfg)
+        sm.delete_endpoint(EndpointName=cfg.endpoint_name)
+        sm.get_waiter("endpoint_deleted").wait(
+            EndpointName=cfg.endpoint_name, WaiterConfig={"Delay": 15, "MaxAttempts": 40}
+        )
+        sm.create_endpoint(EndpointName=cfg.endpoint_name, EndpointConfigName=name)
+    elif status:
         remove_autoscaling(aas, cfg)
         sm.update_endpoint(EndpointName=cfg.endpoint_name, EndpointConfigName=name)
     else:
@@ -188,7 +202,12 @@ def deploy(cfg: DeployConfig, image_uri: str, sm, aas, cw, now: datetime) -> str
     sm.get_waiter("endpoint_in_service").wait(
         EndpointName=cfg.endpoint_name, WaiterConfig={"Delay": 30, "MaxAttempts": 60}
     )
+    # 갱신 실패 시 SageMaker는 이전 설정으로 롤백해도 InService가 되므로 적용된 설정을 확인
+    current = sm.describe_endpoint(EndpointName=cfg.endpoint_name)
     apply_autoscaling(aas, cw, cfg)
+    if current.get("EndpointConfigName") != name:
+        reason = current.get("FailureReason", "알 수 없음")
+        raise DeploymentError(f"새 설정 {name}이 적용되지 않았습니다(이전 설정으로 롤백): {reason}")
     return name
 
 
@@ -228,6 +247,9 @@ def main(argv: list[str] | None = None) -> int:
     except WaiterError:
         reason = sm.describe_endpoint(EndpointName=cfg.endpoint_name).get("FailureReason", "알 수 없음")
         print(f"엔드포인트 배포 실패: {reason}", file=sys.stderr)
+        return 1
+    except DeploymentError as exc:
+        print(f"엔드포인트 배포 실패: {exc}", file=sys.stderr)
         return 1
     print(f"배포 완료: {cfg.endpoint_name} ← {name}")
     return 0
