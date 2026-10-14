@@ -26,3 +26,29 @@ def test_tarball_root_layout(tmp_path):
             "model_revisions.json",
         ]
         assert json.load(tar.extractfile("model_revisions.json")) == {dm.REPO_ID: "abc"}
+
+
+def test_acestep_commit_matches_dockerfile():
+    assert dm.acestep_commit() == "ca1e85fe9430179831e6bc6be790c332190a3866"
+
+
+def test_sync_model_code_overwrites_with_pinned_source(tmp_path):
+    # /opt/ml/model이 읽기 전용이라 ACE-Step의 시작 시 자동 동기화(덮어쓰기)를 미리 해 둔다
+    ck = tmp_path / "checkpoints"
+    (ck / "acestep-v15-turbo").mkdir(parents=True)
+    (ck / "acestep-v15-turbo" / "configuration_acestep_v15.py").write_text("hf")
+    requested = []
+
+    def fetch(url: str) -> bytes:
+        requested.append(url)
+        return b"pinned:" + url.rsplit("/", 1)[1].encode()
+
+    synced = dm.sync_model_code(ck, "abc", fetch=fetch)
+
+    assert synced == list(dm.MODEL_CODE_FILES)
+    assert requested == [
+        f"https://raw.githubusercontent.com/ace-step/ACE-Step-1.5/abc/acestep/models/turbo/{name}"
+        for name in dm.MODEL_CODE_FILES
+    ]
+    for name in dm.MODEL_CODE_FILES:
+        assert (ck / "acestep-v15-turbo" / name).read_bytes() == f"pinned:{name}".encode()

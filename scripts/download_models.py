@@ -8,18 +8,44 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import sys
 import tarfile
+import urllib.request
 from pathlib import Path
+from typing import Callable
 
 from deploy_config import ROOT, load_deploy_config
 
 REPO_ID = "ACE-Step/Ace-Step1.5"
 SKIP_NAMES = {".cache"}  # huggingface_hub local_dir 메타데이터
+# ACE-Step은 시작 시 이 파일들을 자기 소스(acestep/models/turbo)로 덮어쓴다.
+# SageMaker의 /opt/ml/model은 읽기 전용일 수 있어 패키징 때 미리 맞춘다.
+MODEL_CODE_DIR = "acestep-v15-turbo"
+MODEL_CODE_FILES = ("configuration_acestep_v15.py", "modeling_acestep_v15_turbo.py")
+RAW_URL = "https://raw.githubusercontent.com/ace-step/ACE-Step-1.5/{commit}/acestep/models/turbo/{name}"
 
 
 def model_key(revision: str) -> str:
     return f"music/models/ace-step-1.5/{revision}/model.tar.gz"
+
+
+def acestep_commit() -> str:
+    # 컨테이너와 같은 커밋을 써야 해시가 일치하므로 Dockerfile을 단일 출처로 삼는다
+    text = (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8")
+    return re.search(r"^ARG ACESTEP_COMMIT=(\w+)", text, re.M).group(1)
+
+
+def _fetch(url: str) -> bytes:
+    with urllib.request.urlopen(url, timeout=60) as resp:
+        return resp.read()
+
+
+def sync_model_code(checkpoints: Path, commit: str, fetch: Callable[[str], bytes] = _fetch) -> list[str]:
+    target = checkpoints / MODEL_CODE_DIR
+    for name in MODEL_CODE_FILES:
+        (target / name).write_bytes(fetch(RAW_URL.format(commit=commit, name=name)))
+    return list(MODEL_CODE_FILES)
 
 
 def write_revisions(checkpoints: Path, revisions: dict[str, str]) -> None:
@@ -55,7 +81,10 @@ def main(argv: list[str] | None = None) -> int:
     checkpoints = build_dir / "checkpoints"
     print(f"다운로드: {REPO_ID}@{revision}", flush=True)
     snapshot_download(repo_id=REPO_ID, revision=revision, local_dir=str(checkpoints))
-    write_revisions(checkpoints, {REPO_ID: revision})
+    commit = acestep_commit()
+    print(f"모델 코드 동기화: ACE-Step@{commit[:7]}", flush=True)
+    sync_model_code(checkpoints, commit)
+    write_revisions(checkpoints, {REPO_ID: revision, "acestep_model_code": commit})
 
     tar_path = build_dir / "model.tar.gz"
     print("압축 중 (수 분 소요)...", flush=True)
