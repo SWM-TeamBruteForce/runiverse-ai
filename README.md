@@ -29,9 +29,16 @@ python -m venv .venv
 | 단계 | 명령 |
 |---|---|
 | ① 단위 테스트 | `.venv/Scripts/python -m pytest` |
-| ② 컨테이너 계약 | `docker build -f container/Dockerfile -t runiverse-music:local .` → `docker run -p 8080:8080 -e GENERATOR=fake -e STORAGE=local -e LOCAL_OUTPUT_DIR=/tmp/out runiverse-music:local serve` |
+| ② 컨테이너 계약 | `docker build -f container/Dockerfile -t runiverse-music:local .` → `docker run -p 18080:8080 -e GENERATOR=fake -e STORAGE=local -e LOCAL_OUTPUT_DIR=/tmp/out runiverse-music:local serve` |
 | ③ Colab 실생성 | `notebooks/colab_verify.ipynb` |
 | ④ dev 스모크 | `python scripts/smoke_test.py --env dev` |
+
+**② 컨테이너 계약 참고**
+- 첫 빌드 약 25분, 이미지 약 16GB
+- 호스트 포트 18080 사용 → 8080은 로컬 백엔드와 충돌 가능
+- Git Bash: `export MSYS_NO_PATHCONV=1` 먼저 실행 → `/tmp/out` 같은 경로가 Windows 경로로 바뀌는 것 방지
+- 확인: `curl localhost:18080/ping` → 200, `POST /invocations` → 200(정상)·400(범위 위반)
+- 결과 파일: `docker exec <컨테이너> ls -R /tmp/out`
 
 ## 🚀 dev 배포 (서울 `ap-northeast-2`)
 
