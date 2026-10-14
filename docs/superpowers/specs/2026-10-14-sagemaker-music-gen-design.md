@@ -55,7 +55,9 @@ C:\dev\runiverse\ai\
 │  ├─ deploy.py                      # --env dev
 │  └─ smoke_test.py
 ├─ deploy/envs/dev.yaml
-├─ notebooks/baseline_colab.ipynb
+├─ notebooks/
+│  ├─ baseline_colab.ipynb           # 기존 베이스라인 보관
+│  └─ colab_verify.ipynb             # Colab GPU에서 서버 코드 실검증
 ├─ tests/
 └─ docs/superpowers/specs/
 ```
@@ -114,8 +116,8 @@ C:\dev\runiverse\ai\
 | `container/serve` | uvicorn `0.0.0.0:8080`, 워커 1개 (GPU 1장 = 모델 1벌) | `app` |
 | `config.py` | 환경변수 로드·검증, 잘못된 값이면 시작 시 실패 | — |
 | `schemas.py` | `MusicRequest` / `MusicResponse` (Pydantic, 범위 검증) | — |
-| `generator.py` | `MusicGenerator.load(model_dir)` 1회 / `generate(req, out_dir)` 요청마다. **torch·acestep import는 이 파일만** | `acestep` |
-| `storage.py` | `build_key(request_id)`, `upload(path, key)` | `boto3` |
+| `generator.py` | `MusicGenerator.load(model_dir)` 1회 / `generate(req, out_dir)` 요청마다. **torch·acestep import는 이 파일만**. `FakeGenerator`: 모델 없이 짧은 무음 wav 반환 | `acestep` |
+| `storage.py` | `build_key(request_id)`, `upload(path, key)`. `S3Storage` / `LocalStorage`(로컬 폴더 복사) | `boto3` |
 | `app.py` | lifespan에서 `load()` → `/ping`은 로드 완료 후 200 → `/invocations`는 검증 → 생성 → 업로드 → 응답. GPU 작업은 lock으로 직렬화 | 전부 |
 
 **가중치 배치**
@@ -168,6 +170,11 @@ C:\dev\runiverse\ai\
 | `OFFLOAD_TO_CPU` | `true` |
 | `AUDIO_FORMAT` | `wav` |
 | `LOG_LEVEL` | `INFO` |
+| `GENERATOR` | `acestep` (테스트용 `fake`) |
+| `STORAGE` | `s3` (테스트용 `local`) |
+| `LOCAL_OUTPUT_DIR` | `STORAGE=local`일 때만 사용 |
+
+> ⚠️ dev.yaml에서는 `GENERATOR=acestep`, `STORAGE=s3` 고정 — `fake`·`local`은 로컬·Colab 검증 전용. `deploy.py`는 다른 값이면 배포 거부
 
 **재빌드가 필요한 값** → `dev.yaml`이 아닌 Dockerfile·`pyproject.toml`에서 관리
 - ACE-Step 커밋, CUDA 베이스 이미지, Python 의존성
@@ -224,17 +231,44 @@ manifest에 기록:
 
 ## 🧪 10. 테스트
 
-**로컬 단위 테스트** (`pytest`, GPU 불필요)
-- `schemas`: 범위 경계값
-- `config`: 환경변수 파싱·오류
-- `storage`: 키 규칙
-- `app`: 가짜 generator·storage로 `/ping` 준비 전후, `/invocations` 200/400/500
+> 로컬 PC에 GPU 없음 → ①② 로컬, ③ Colab GPU, ④ dev 엔드포인트 순으로 단계 검증
 
-**dev 스모크 테스트** (`scripts/smoke_test.py`)
+| 단계 | 위치 | 검증 대상 | GPU |
+|---|---|---|---|
+| ① 단위 테스트 | 로컬 `pytest` | 로직·검증·응답 코드 | ❌ |
+| ② 컨테이너 계약 | 로컬 Docker | 이미지·`serve`·8080·SageMaker 계약 | ❌ |
+| ③ 실생성 | Colab T4 | 실제 음원 생성 전체 코드 경로 | ✅ 무료 |
+| ④ 스모크 | dev 엔드포인트 | 드라이버·콜드 스타트·Async·SNS | ✅ 과금 |
+
+### ① 단위 테스트
+- `schemas`: 범위 경계값
+- `config`: 환경변수 파싱·오류, 알 수 없는 `GENERATOR`·`STORAGE` 값 거부
+- `storage`: 키 규칙, `LocalStorage` 저장
+- `app`: `FakeGenerator`·`LocalStorage`로 `/ping` 준비 전후, `/invocations` 200/400/500
+
+### ② 컨테이너 계약 (Docker Desktop)
+- `docker build` → `docker run -p 8080:8080 -e GENERATOR=fake -e STORAGE=local <image> serve`
+- `curl /ping` 200, `/invocations` 기본 요청 → 응답 JSON 확인
+- 잡는 문제: Dockerfile·진입점·포트·응답 형식 오류
+- ⚠️ CUDA·PyTorch 포함 이미지 약 10GB → 첫 빌드 오래 걸림
+
+### ③ Colab 실생성 (`notebooks/colab_verify.ipynb`)
+1. 베이스라인 셀로 ACE-Step 환경·모델 준비
+2. runiverse-ai 코드를 같은 venv에 설치
+   - 원격 저장소 전: Drive mount 후 설치
+   - 원격 저장소 후: `pip install git+https://...` (비공개면 토큰)
+3. checkpoints를 `/opt/ml/model` 구조로 연결
+4. 백그라운드 `uvicorn runiverse_music.app` → `localhost:8080`
+5. `requests`로 `/ping`·`/invocations` 호출 → 응답 JSON 확인, wav 재생
+- `GENERATOR=acestep`, `STORAGE=local` (Colab에 AWS 키 미보관)
+- 미검증: Docker 이미지, SageMaker 드라이버, Async 큐, SNS
+
+### ④ dev 스모크 (`scripts/smoke_test.py`)
 - 기본 요청 Async 호출 → 응답 JSON 확인
 - wav 존재, 48kHz, 길이 약 30초 확인
+- ①~③ 통과 후 진행 (엔드포인트 수정 1회에 10분 이상 소요)
 
-> 로컬 Windows에는 CUDA GPU가 없다고 가정 → 실제 생성 검증은 dev 엔드포인트에서 수행
+> 💡 ④에서 반복 실패 시: SageMaker Notebook Instance(GPU) local mode로 컨테이너 직접 실행 — 시간당 과금이라 필요할 때만
 
 ---
 
