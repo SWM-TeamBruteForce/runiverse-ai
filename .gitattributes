@@ -1,0 +1,5 @@
+* text=auto
+container/serve text eol=lf
+*.sh text eol=lf
+container/Dockerfile text eol=lf
+*.ipynb text eol=lf
