@@ -2,8 +2,9 @@
 
 Runiverse 음악 생성(ACE-Step 1.5 Turbo) — SageMaker Async 엔드포인트 서빙.
 
+- 기능명세: `docs/AI_러닝_음악_기능명세.md`
+- 전처리 모듈: `docs/AI_음악_전처리_모듈.md`
 - 설계: `docs/superpowers/specs/2026-10-14-sagemaker-music-gen-design.md`
-- 구현 계획: `docs/superpowers/plans/2026-10-14-sagemaker-music-gen.md`
 
 ## 📁 구조
 
