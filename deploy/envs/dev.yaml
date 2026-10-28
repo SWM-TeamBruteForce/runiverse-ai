@@ -1,0 +1,31 @@
+# runiverse-music dev 배포 설정 — deploy.py 실행 시 읽음 (값 변경 후 재배포만 하면 반영)
+region: ap-northeast-2      # 서울
+endpoint_name: runiverse-music-dev
+ecr_repository: runiverse-music
+instance_type: ml.g4dn.xlarge
+initial_instance_count: 1
+max_concurrent_invocations_per_instance: 1
+model_data_download_timeout: 600
+container_startup_health_check_timeout: 600
+autoscaling:
+  min_capacity: 0
+  max_capacity: 1
+  target_backlog_per_instance: 1.0
+  scale_in_cooldown: 600
+  scale_out_cooldown: 300
+
+# ▼ AWS 리소스 생성 후 입력 (bucket·execution_role_arn·model_data_url 비어 있으면 배포 거부)
+bucket: ""
+execution_role_arn: ""
+model_data_url: ""          # download_models.py 출력값
+sns_success_topic_arn: ""   # 비우면 알림 없음
+sns_error_topic_arn: ""
+inference_ami_version: ""   # 드라이버 호환 문제 시 지정
+
+container_env:
+  OUTPUT_PREFIX: music/outputs
+  MAX_DURATION_SECONDS: "120"
+  INFERENCE_STEPS: "8"
+  OFFLOAD_TO_CPU: "true"
+  AUDIO_FORMAT: wav
+  LOG_LEVEL: INFO
