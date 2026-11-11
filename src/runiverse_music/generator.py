@@ -12,9 +12,9 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from .config import Settings
-from .schemas import MusicRequest
 
 CONFIG_PATH = "acestep-v15-turbo"
+LM_MODEL = "acestep-5Hz-lm-1.7B"  # Ace-Step1.5 모델 묶음(model.tar.gz)에 함께 들어 있는 LM
 
 
 class GenerationError(RuntimeError):
@@ -26,6 +26,18 @@ class CudaOutOfMemory(GenerationError):
 
 
 @dataclass(frozen=True)
+class MusicJob:
+    """곡 1개 생성 입력. 수치는 caption에 쓰지 않고 ACE-Step 파라미터로 따로 넘긴다."""
+
+    caption: str
+    bpm: int
+    keyscale: str       # "" → ACE-Step이 정함 (노트북 EXPERIMENT)
+    timesignature: str
+    duration: float
+    seed: int
+
+
+@dataclass(frozen=True)
 class GenerationResult:
     audio_path: Path
     sample_rate: int
@@ -34,6 +46,7 @@ class GenerationResult:
     size_bytes: int
     generation_seconds: float
     peak_torch_allocated_gib: float
+    lm_caption: str | None  # 5Hz LM이 개선한 caption. LM을 안 쓰면 None
 
 
 class Generator(Protocol):
@@ -41,7 +54,7 @@ class Generator(Protocol):
 
     def load(self) -> None: ...
 
-    def generate(self, request: MusicRequest, out_dir: Path) -> GenerationResult: ...
+    def generate(self, job: MusicJob, out_dir: Path) -> GenerationResult: ...
 
 
 def check_audio_file(path: Path) -> Path:
@@ -63,15 +76,15 @@ class FakeGenerator:
     def load(self) -> None:
         pass
 
-    def generate(self, request: MusicRequest, out_dir: Path) -> GenerationResult:
-        path = Path(out_dir) / f"{request.request_id}.wav"
+    def generate(self, job: MusicJob, out_dir: Path) -> GenerationResult:
+        path = Path(out_dir) / "fake.wav"
         with wave.open(str(path), "wb") as w:
             w.setnchannels(self.CHANNELS)
             w.setsampwidth(2)
             w.setframerate(self.SAMPLE_RATE)
             w.writeframes(b"\x00" * self.SAMPLE_RATE * self.CHANNELS * 2)
         check_audio_file(path)
-        return GenerationResult(path, self.SAMPLE_RATE, self.CHANNELS, 1.0, path.stat().st_size, 0.0, 0.0)
+        return GenerationResult(path, self.SAMPLE_RATE, self.CHANNELS, 1.0, path.stat().st_size, 0.0, 0.0, None)
 
 
 def _read_json(path: Path) -> dict[str, Any]:
@@ -88,6 +101,7 @@ class AceStepGenerator:
     def __init__(self, settings: Settings) -> None:
         self._settings = settings
         self._dit = None
+        self._lm = None
         self.manifest: dict[str, Any] = {}
 
     def load(self) -> None:
@@ -119,6 +133,8 @@ class AceStepGenerator:
             raise GenerationError(f"DiT 초기화 실패: {status}")
         if str(dit.device) != "cuda":
             raise GenerationError(f"CUDA 요청이 {dit.device}로 전환되었습니다.")
+        if s.use_lm:
+            self._lm = _load_lm(s, dit.dtype)
         torch.cuda.synchronize()
         self._dit = dit
         self.manifest = {
@@ -137,11 +153,12 @@ class AceStepGenerator:
                 "inference_steps": s.inference_steps,
                 "offload_to_cpu": s.offload_to_cpu,
                 "audio_format": s.audio_format,
-                "use_lm": False,
+                "use_lm": s.use_lm,
+                "lm_model": LM_MODEL if s.use_lm else None,
             },
         }
 
-    def generate(self, request: MusicRequest, out_dir: Path) -> GenerationResult:
+    def generate(self, job: MusicJob, out_dir: Path) -> GenerationResult:
         if self._dit is None:
             raise GenerationError("모델이 로드되지 않았습니다.")
 
@@ -152,24 +169,27 @@ class AceStepGenerator:
         s = self._settings
         params = GenerationParams(
             task_type="text2music",
-            caption=request.caption,
+            caption=job.caption,
             lyrics="[Instrumental]",
             instrumental=True,
-            bpm=request.bpm,
-            duration=request.duration,
-            timesignature="4",
-            seed=request.seed,
+            bpm=job.bpm,
+            keyscale=job.keyscale,
+            timesignature=job.timesignature,
+            duration=job.duration,
+            seed=job.seed,
             inference_steps=s.inference_steps,
+            # 문서 7장: LM은 caption 개선에만. 오디오 코드(thinking)·메타 추론은 끈다
+            # 직접 준 bpm·keyscale·timesignature·duration은 LM이 덮어쓰지 않는다 (빈 값만 채움)
             thinking=False,
             use_cot_metas=False,
-            use_cot_caption=False,
+            use_cot_caption=self._lm is not None,
             use_cot_lyrics=False,
             use_cot_language=False,
         )
         config = GenerationConfig(
             batch_size=1,
             use_random_seed=False,
-            seeds=[request.seed],
+            seeds=[job.seed],
             audio_format=s.audio_format,
         )
         torch.cuda.empty_cache()
@@ -178,7 +198,7 @@ class AceStepGenerator:
         started = time.perf_counter()
         try:
             with torch.inference_mode():
-                result = generate_music(self._dit, None, params, config, save_dir=str(out_dir))
+                result = generate_music(self._dit, self._lm, params, config, save_dir=str(out_dir))
             torch.cuda.synchronize()
         except torch.cuda.OutOfMemoryError as exc:
             torch.cuda.empty_cache()
@@ -199,12 +219,32 @@ class AceStepGenerator:
         path = check_audio_file(Path(raw_path).resolve())
         info = sf.info(str(path))
         peak = torch.cuda.max_memory_allocated() / 2**30
+        # LM을 안 쓰면 lm_metadata가 None
+        lm_caption = (result.extra_outputs.get("lm_metadata") or {}).get("caption")
         # 이전 결과 텐서가 다음 생성의 메모리를 차지하지 않게 해제
         del result
         return GenerationResult(
             path, int(info.samplerate), int(info.channels), float(info.duration),
-            path.stat().st_size, elapsed, peak,
+            path.stat().st_size, elapsed, peak, lm_caption,
         )
+
+
+def _load_lm(s: Settings, dtype):
+    """5Hz LM (PyTorch 백엔드). 노트북 infer_music.py와 같은 초기화."""
+    from acestep.llm_inference import LLMHandler
+
+    lm = LLMHandler()
+    status, success = lm.initialize(
+        checkpoint_dir=str(s.model_dir),
+        lm_model_path=LM_MODEL,
+        backend="pt",
+        device="cuda",
+        offload_to_cpu=s.offload_to_cpu,
+        dtype=dtype,
+    )
+    if not success:
+        raise GenerationError(f"5Hz LM 초기화 실패: {status}")
+    return lm
 
 
 def make_generator(settings: Settings) -> Generator:

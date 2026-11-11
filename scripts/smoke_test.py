@@ -1,4 +1,4 @@
-"""dev 엔드포인트 스모크 테스트: 기본 요청 → Async 호출 → 결과 검증.
+"""dev 엔드포인트 스모크 테스트: 사진 없는 카드 → Async 호출 → 결과 검증.
 
 사용: python scripts/smoke_test.py --env dev [--timeout 1800]
 - 인스턴스 0대에서 시작하면 콜드 스타트로 10분 이상 걸릴 수 있음
@@ -9,26 +9,25 @@ import argparse
 import json
 import sys
 import time
+import uuid
 from datetime import datetime, timezone
 
 from deploy_config import load_deploy_config
 
-DEFAULT_CAPTION = (
-    "Energetic electronic running music, steady clear drum beat, "
-    "uplifting synth melody, consistent rhythm, instrumental, no vocals"
-)
-EXPECTED_SAMPLE_RATE = 48000
-DURATION_TOLERANCE_SECONDS = 1.0
+def input_key(s3_env: str, record_card_id: int, inference_id: str) -> str:
+    """입력 JSON 키 (Notion「S3 버킷 저장 구조」6장). 호출마다 InferenceId가 달라 재요청이 이전 입력을 덮어쓰지 않는다."""
+    return f"async/inputs/{s3_env}/{record_card_id}/{inference_id}.json"
 
 
-def build_request(request_id: str) -> dict:
+def build_request(record_card_id: int) -> dict:
+    """사진 없는 카드 1건. ID는 스모크 전용 값이라 실제 사용자와 겹치지 않게 user_id=0."""
     return {
-        "request_id": request_id,
-        "caption": DEFAULT_CAPTION,
-        "bpm": 170,
-        "duration": 30.0,
-        "seed": 42,
-        "instrumental": True,
+        "user_id": 0,
+        "record_card_id": record_card_id,
+        "memo": None,
+        "activity_type": "DAILY",
+        "running_summary": {"avg_pace": 320, "weather_code": 0},
+        "photos": [],
     }
 
 
@@ -39,17 +38,13 @@ def parse_s3_uri(uri: str) -> tuple[str, str]:
     return bucket, key
 
 
-def check_response(response: dict, expected_duration: float) -> list[str]:
+def check_response(response: dict) -> list[str]:
     problems = []
-    if response.get("sample_rate") != EXPECTED_SAMPLE_RATE:
-        problems.append(f"sample_rate={response.get('sample_rate')} (기대 {EXPECTED_SAMPLE_RATE})")
-    actual = response.get("actual_duration_seconds")
-    if not isinstance(actual, (int, float)) or abs(actual - expected_duration) > DURATION_TOLERANCE_SECONDS:
-        problems.append(f"actual_duration_seconds={actual} (기대 약 {expected_duration:g})")
-    if not response.get("bytes"):
-        problems.append("bytes가 0입니다")
-    if not str(response.get("audio_s3_key", "")).endswith(".wav"):
-        problems.append(f"audio_s3_key={response.get('audio_s3_key')} (wav 아님)")
+    if response.get("status") != "SUCCEEDED":
+        problems.append(f"status={response.get('status')}, error={response.get('error')}")
+    key = (response.get("base_music") or {}).get("s3_key")
+    if not str(key).endswith(".wav"):
+        problems.append(f"base_music.s3_key={key} (wav 아님)")
     return problems
 
 
@@ -96,18 +91,19 @@ def main(argv: list[str] | None = None) -> int:
     s3 = session.client("s3")
     runtime = session.client("sagemaker-runtime")
 
-    request_id = f"smoke-{datetime.now(timezone.utc):%Y%m%d%H%M%S}"
-    request_key = f"music/requests/{request_id}.json"
-    s3.put_object(Bucket=cfg.bucket, Key=request_key, Body=json.dumps(build_request(request_id)).encode(),
+    record_card_id = int(f"{datetime.now(timezone.utc):%Y%m%d%H%M%S}")  # 스모크 전용 카드 ID
+    inference_id = uuid.uuid4().hex  # 실제 서비스에서는 AI 서버가 호출마다 만든다
+    request_key = input_key(cfg.s3_env, record_card_id, inference_id)
+    s3.put_object(Bucket=cfg.bucket, Key=request_key, Body=json.dumps(build_request(record_card_id)).encode(),
                   ContentType="application/json")
     invoked = runtime.invoke_endpoint_async(
         EndpointName=cfg.endpoint_name,
         InputLocation=f"s3://{cfg.bucket}/{request_key}",
         ContentType="application/json",
-        InferenceId=request_id,
+        InferenceId=inference_id,
         InvocationTimeoutSeconds=3600,
     )
-    print(f"호출: {request_id} → {invoked['OutputLocation']}", flush=True)
+    print(f"호출: {request_key} → {invoked['OutputLocation']}", flush=True)
 
     status, body = wait_for_result(s3, invoked["OutputLocation"], invoked.get("FailureLocation"), args.timeout)
     if status == "failure":
@@ -115,11 +111,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     response = json.loads(body)
-    problems = check_response(response, 30.0)
-    if response.get("audio_s3_key"):
-        head = s3.head_object(Bucket=cfg.bucket, Key=response["audio_s3_key"])
-        if head["ContentLength"] != response.get("bytes"):
-            problems.append(f"S3 크기 {head['ContentLength']} ≠ 응답 bytes {response.get('bytes')}")
+    problems = check_response(response)
+    if not problems:
+        head = s3.head_object(Bucket=cfg.bucket, Key=response["base_music"]["s3_key"])
+        if head["ContentLength"] == 0:
+            problems.append("S3 음원이 0바이트입니다")
     if problems:
         print("검증 실패:\n- " + "\n- ".join(problems), file=sys.stderr)
         return 1

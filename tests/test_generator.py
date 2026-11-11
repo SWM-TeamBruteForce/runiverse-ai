@@ -6,24 +6,24 @@ import pytest
 
 from runiverse_music.config import load_settings
 from runiverse_music.generator import (
-    AceStepGenerator, FakeGenerator, GenerationError, check_audio_file, make_generator,
+    AceStepGenerator, FakeGenerator, GenerationError, MusicJob, check_audio_file, make_generator,
 )
-from runiverse_music.schemas import MusicRequest
 
-REQ = MusicRequest(request_id="r1", caption="c", bpm=170, duration=30, seed=42)
+JOB = MusicJob(caption="c", bpm=170, keyscale="E Major", timesignature="4", duration=30.0, seed=42)
 BASE_ENV = {"STORAGE": "local", "LOCAL_OUTPUT_DIR": "/tmp/o"}
 
 
 def test_fake_generator_writes_wav(tmp_path):
     g = FakeGenerator()
     g.load()
-    result = g.generate(REQ, tmp_path)
-    assert result.audio_path == tmp_path / "r1.wav"
+    result = g.generate(JOB, tmp_path)
+    assert result.audio_path == tmp_path / "fake.wav"
     with wave.open(str(result.audio_path)) as w:
         assert w.getframerate() == 48000
         assert w.getnchannels() == 2
     assert (result.sample_rate, result.channels) == (48000, 2)
     assert result.size_bytes == result.audio_path.stat().st_size > 0
+    assert result.lm_caption is None  # LM이 없으면 개선된 caption도 없다
     assert g.manifest == {"generator": "fake"}
 
 
@@ -47,7 +47,7 @@ def test_make_generator():
 def test_acestep_generate_before_load_fails(tmp_path):
     g = AceStepGenerator(load_settings(BASE_ENV))
     with pytest.raises(GenerationError, match="로드"):
-        g.generate(REQ, tmp_path)
+        g.generate(JOB, tmp_path)
 
 
 def test_module_import_does_not_load_torch():

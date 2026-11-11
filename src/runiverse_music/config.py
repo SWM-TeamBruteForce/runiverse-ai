@@ -13,14 +13,16 @@ class ConfigError(ValueError):
 
 @dataclass(frozen=True)
 class Settings:
+    analyzer: str
     generator: str
     storage: str
     output_bucket: str | None
+    photo_bucket: str | None  # 사진 원본을 읽는 기존 사진 버킷 (AI 버킷과 별도)
     output_prefix: str
     local_output_dir: Path | None
-    max_duration_seconds: float
     inference_steps: int
     offload_to_cpu: bool
+    use_lm: bool  # 5Hz LM으로 caption 개선 (use_cot_caption)
     audio_format: str
     log_level: str
     model_dir: Path
@@ -58,6 +60,9 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
     bucket = env.get("OUTPUT_BUCKET", "").strip() or None
     if storage == "s3" and bucket is None:
         raise ConfigError("STORAGE=s3이면 OUTPUT_BUCKET이 필요합니다.")
+    photo_bucket = env.get("PHOTO_BUCKET", "").strip() or None
+    if storage == "s3" and photo_bucket is None:
+        raise ConfigError("STORAGE=s3이면 PHOTO_BUCKET이 필요합니다.")
     local_dir = env.get("LOCAL_OUTPUT_DIR", "").strip()
     if storage == "local" and not local_dir:
         raise ConfigError("STORAGE=local이면 LOCAL_OUTPUT_DIR이 필요합니다.")
@@ -66,14 +71,16 @@ def load_settings(env: Mapping[str, str] | None = None) -> Settings:
         raise ConfigError("OUTPUT_PREFIX가 비어 있습니다.")
 
     return Settings(
+        analyzer=_choice(env, "ANALYZER", "qwen", ("qwen", "fake")),
         generator=_choice(env, "GENERATOR", "acestep", ("acestep", "fake")),
         storage=storage,
         output_bucket=bucket,
+        photo_bucket=photo_bucket,
         output_prefix=prefix,
         local_output_dir=Path(local_dir) if local_dir else None,
-        max_duration_seconds=_number(env, "MAX_DURATION_SECONDS", "120", float, 10, 600),
         inference_steps=_number(env, "INFERENCE_STEPS", "8", int, 1, 200),
         offload_to_cpu=_flag(env, "OFFLOAD_TO_CPU", "true"),
+        use_lm=_flag(env, "USE_LM", "true"),
         audio_format=_choice(env, "AUDIO_FORMAT", "wav", ("wav",)),
         log_level=_choice(env, "LOG_LEVEL", "INFO", ("debug", "info", "warning", "error")).upper(),
         model_dir=Path(env.get("MODEL_DIR", "/opt/ml/model")),

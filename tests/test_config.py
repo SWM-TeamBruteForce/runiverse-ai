@@ -6,14 +6,16 @@ LOCAL = {"GENERATOR": "fake", "STORAGE": "local", "LOCAL_OUTPUT_DIR": "/tmp/out"
 
 
 def test_defaults_for_s3():
-    s = load_settings({"OUTPUT_BUCKET": "bucket-a"})
+    s = load_settings({"OUTPUT_BUCKET": "bucket-a", "PHOTO_BUCKET": "photos-a"})
+    assert s.analyzer == "qwen"
     assert s.generator == "acestep"
     assert s.storage == "s3"
     assert s.output_bucket == "bucket-a"
+    assert s.photo_bucket == "photos-a"
     assert s.output_prefix == "music/outputs"
-    assert s.max_duration_seconds == 120.0
     assert s.inference_steps == 8
     assert s.offload_to_cpu is True
+    assert s.use_lm is True  # 문서 7장: 5Hz LM caption 개선이 1차 설정
     assert s.audio_format == "wav"
     assert s.log_level == "INFO"
     assert s.model_dir.as_posix() == "/opt/ml/model"
@@ -31,6 +33,12 @@ def test_local_storage_settings():
 def test_s3_requires_bucket():
     with pytest.raises(ConfigError, match="OUTPUT_BUCKET"):
         load_settings({})
+
+
+def test_s3_requires_photo_bucket():
+    # 사진은 AI 버킷이 아니라 기존 사진 버킷에서 읽는다
+    with pytest.raises(ConfigError, match="PHOTO_BUCKET"):
+        load_settings({"OUTPUT_BUCKET": "bucket-a"})
 
 
 def test_local_requires_dir():
@@ -52,12 +60,11 @@ def test_prefix_slashes_trimmed():
 @pytest.mark.parametrize(
     "key,value",
     [
+        ("ANALYZER", "gpt"),
         ("GENERATOR", "gpu"),
         ("STORAGE", "gcs"),
         ("OFFLOAD_TO_CPU", "yes"),
-        ("MAX_DURATION_SECONDS", "5"),
-        ("MAX_DURATION_SECONDS", "abc"),
-        ("MAX_DURATION_SECONDS", "nan"),
+        ("USE_LM", "on"),
         ("INFERENCE_STEPS", "0"),
         ("INFERENCE_STEPS", "8.5"),
         ("AUDIO_FORMAT", "mp3"),

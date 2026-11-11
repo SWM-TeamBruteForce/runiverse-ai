@@ -1,24 +1,34 @@
 import json
+import logging
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from runiverse_music.analyzer import FakeAnalyzer
 from runiverse_music.app import build_app, create_app
 from runiverse_music.config import load_settings
-from runiverse_music.generator import CudaOutOfMemory, FakeGenerator, GenerationError
+from runiverse_music.generator import FakeGenerator, GenerationError
 from runiverse_music.storage import LocalStorage, StorageError
+from test_card_request import CARD, card
 
-REQ = {"request_id": "req-1", "caption": "running music", "bpm": 170, "duration": 30, "seed": 42}
+BASE_KEY = "music/outputs/123/TRAVEL/101/base.wav"
 
 
 @pytest.fixture
 def settings(tmp_path):
-    return load_settings({"GENERATOR": "fake", "STORAGE": "local", "LOCAL_OUTPUT_DIR": str(tmp_path / "out")})
+    return load_settings(
+        {"ANALYZER": "fake", "GENERATOR": "fake", "STORAGE": "local", "LOCAL_OUTPUT_DIR": str(tmp_path / "out")}
+    )
 
 
-def make_client(settings, generator=None, storage=None):
-    app = create_app(settings, generator or FakeGenerator(), storage or LocalStorage(settings.local_output_dir))
+def make_client(settings, analyzer=None, generator=None, storage=None):
+    app = create_app(
+        settings,
+        analyzer or FakeAnalyzer(),
+        generator or FakeGenerator(),
+        storage or LocalStorage(settings.local_output_dir),
+    )
     return TestClient(app)
 
 
@@ -36,96 +46,125 @@ def test_ping_200_after_load(settings):
         assert client.get("/ping").status_code == 200
 
 
-def test_load_failure_aborts_startup(settings):
+def test_generator_load_failure_aborts_startup(settings):
     class Broken(FakeGenerator):
         def load(self):
             raise GenerationError("no cuda")
 
     with pytest.raises(GenerationError):
-        with make_client(settings, Broken()):
+        with make_client(settings, generator=Broken()):
             pass
 
 
-def test_invocation_success(settings):
+def test_analyzer_load_failure_aborts_startup(settings):
+    class Broken(FakeAnalyzer):
+        def load(self):
+            raise RuntimeError("no weights")
+
+    with pytest.raises(RuntimeError):
+        with make_client(settings, analyzer=Broken()):
+            pass
+
+
+def test_invocation_returns_card_result(settings):
     with make_client(settings) as client:
-        r = post(client, REQ)
+        r = post(client, card())
     assert r.status_code == 200
     data = r.json()
-    assert data["request_id"] == "req-1"
-    assert data["audio_s3_key"] == "music/outputs/req-1/req-1.wav"
-    assert data["sample_rate"] == 48000
-    assert data["bytes"] > 0
-    assert data["manifest"]["generator"] == "fake"
-    assert data["manifest"]["request"]["bpm"] == 170
-    assert (settings.local_output_dir / data["audio_s3_key"]).is_file()
+    assert (data["record_card_id"], data["status"], data["error"]) == (101, "SUCCEEDED", None)
+    assert data["base_music"]["s3_key"] == BASE_KEY
+    assert [p["photo_index"] for p in data["photo_music"]] == [0]
+    assert data["manifest"]["prompt_mapping_version"] == "v1"
+    assert (settings.local_output_dir / BASE_KEY).is_file()
 
 
 def test_same_request_twice_overwrites(settings):
     with make_client(settings) as client:
-        first, second = post(client, REQ), post(client, REQ)
+        first, second = post(client, card()), post(client, card())
     assert first.status_code == second.status_code == 200
-    assert first.json()["audio_s3_key"] == second.json()["audio_s3_key"]
+    assert first.json()["base_music"]["s3_key"] == second.json()["base_music"]["s3_key"]
+
+
+def test_invalid_request_body_keeps_ids_when_readable(settings):
+    with make_client(settings) as client:
+        r = post(client, card(activity_type="RUN"))
+    assert r.status_code == 400
+    body = r.json()
+    assert (body["user_id"], body["record_card_id"], body["status"]) == (123, 101, "FAILED")
+    assert body["error"]["detail"][0]["loc"] == ["activity_type"]
 
 
 @pytest.mark.parametrize(
     "payload",
-    [{**REQ, "bpm": 500}, {**REQ, "duration": 121}, {**REQ, "request_id": "../x"}, {**REQ, "instrumental": False}],
+    [
+        card(activity_type="RUN"),
+        card(bpm=170),
+        card(photos=[{"caption": "image_key 없음"}]),
+        {k: v for k, v in CARD.items() if k != "user_id"},
+    ],
 )
 def test_invalid_request_400(settings, payload):
     with make_client(settings) as client:
         r = post(client, payload)
     assert r.status_code == 400
-    assert r.json()["error"] == "invalid_request"
+    assert (r.json()["status"], r.json()["error"]["code"]) == ("FAILED", "INVALID_REQUEST")
 
 
 def test_malformed_json_400(settings):
     with make_client(settings) as client:
         r = client.post("/invocations", content=b"{oops", headers={"Content-Type": "application/json"})
     assert r.status_code == 400
+    assert (r.json()["user_id"], r.json()["record_card_id"]) == (None, None)  # 읽을 수 없으면 ID 없음
 
 
-def test_oom_then_recovers(settings):
-    class OomOnce(FakeGenerator):
-        def __init__(self):
-            super().__init__()
-            self.calls = 0
-
-        def generate(self, request, out_dir):
-            self.calls += 1
-            if self.calls == 1:
-                raise CudaOutOfMemory("CUDA out of memory")
-            return super().generate(request, out_dir)
-
-    with make_client(settings, OomOnce()) as client:
-        first, second = post(client, REQ), post(client, REQ)
-    assert first.status_code == 500
-    assert first.json()["error"] == "cuda_oom"
-    assert second.status_code == 200
-
-
-def test_generation_failure_500(settings):
+def test_track_failure_is_500_with_code(settings):
     class Failing(FakeGenerator):
-        def generate(self, request, out_dir):
+        def generate(self, job, out_dir):
             raise GenerationError("empty file")
 
-    with make_client(settings, Failing()) as client:
-        r = post(client, REQ)
-    assert r.status_code == 500
-    assert r.json() == {"error": "generation_failed", "request_id": "req-1", "message": "empty file"}
+    with make_client(settings, generator=Failing()) as client:
+        r = post(client, card())
+    assert r.status_code == 500  # 실패는 200이 아님 → FailureLocation(async/failures/)
+    assert r.json() == {
+        "user_id": 123, "record_card_id": 101, "status": "FAILED",
+        "error": {"code": "MUSIC_GENERATION_FAILED",
+                  "message": "음악 생성 실패: 기본 음악(GenerationError), 사진 0(GenerationError)"},
+    }
 
 
-def test_upload_failure_500(settings):
-    class BrokenStorage:
+def test_upload_failure_is_502(settings):
+    class BrokenStorage(LocalStorage):
         def upload(self, local_path, key):
             raise StorageError("s3 down")
 
-    with make_client(settings, storage=BrokenStorage()) as client:
-        r = post(client, REQ)
-    assert r.status_code == 500
-    assert r.json()["error"] == "upload_failed"
+    with make_client(settings, storage=BrokenStorage(settings.local_output_dir)) as client:
+        r = post(client, card())
+    assert r.status_code == 502
+    assert (r.json()["status"], r.json()["error"]["code"]) == ("FAILED", "MUSIC_UPLOAD_FAILED")
+
+
+def test_unexpected_error_is_500_then_recovers_without_private_text(settings, caplog):
+    review = CARD["memo"]
+
+    class FailsOnce(FakeAnalyzer):
+        calls = 0
+
+        def to_gpu(self):
+            self.calls += 1
+            if self.calls == 1:
+                raise RuntimeError(review)  # 예외 메시지에 원문이 섞인 경우
+
+    with caplog.at_level(logging.INFO, logger="runiverse_music"):
+        with make_client(settings, analyzer=FailsOnce()) as client:
+            first, second = post(client, card()), post(client, card())
+    assert first.status_code == 500
+    assert first.json()["error"]["code"] == "INTERNAL_ERROR"
+    assert second.status_code == 200
+    assert review not in caplog.text
 
 
 def test_build_app_from_env(monkeypatch, tmp_path):
+    monkeypatch.setenv("ANALYZER", "fake")
     monkeypatch.setenv("GENERATOR", "fake")
     monkeypatch.setenv("STORAGE", "local")
     monkeypatch.setenv("LOCAL_OUTPUT_DIR", str(tmp_path))

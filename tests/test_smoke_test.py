@@ -5,7 +5,7 @@ import pytest
 from botocore.exceptions import ClientError
 
 import smoke_test as st
-from runiverse_music.schemas import parse_request
+from runiverse_music.schemas import CardRequest
 
 NOT_FOUND = ClientError({"Error": {"Code": "404", "Message": "Not Found"}}, "HeadObject")
 
@@ -38,12 +38,16 @@ class Clock:
         self.now += seconds
 
 
-GOOD = {"sample_rate": 48000, "actual_duration_seconds": 30.0, "bytes": 100, "audio_s3_key": "music/outputs/r/r.wav"}
+GOOD = {"status": "SUCCEEDED", "base_music": {"s3_key": "audio/test/0/DAILY/1/base.wav", "duration_seconds": 30.0}}
 
 
 def test_build_request_is_valid():
-    req = parse_request(json.dumps(st.build_request("smoke-1")).encode(), max_duration=120)
-    assert (req.bpm, req.duration, req.seed) == (170, 30.0, 42)
+    req = CardRequest.model_validate_json(json.dumps(st.build_request(1)))
+    assert (req.record_card_id, req.activity_type, req.photos) == (1, "DAILY", [])
+
+
+def test_input_key_groups_by_card_and_inference_id():
+    assert st.input_key("test", 101, "abc") == "async/inputs/test/101/abc.json"
 
 
 def test_parse_s3_uri():
@@ -53,14 +57,14 @@ def test_parse_s3_uri():
 
 
 def test_check_response_ok():
-    assert st.check_response(GOOD, 30.0) == []
+    assert st.check_response(GOOD) == []
 
 
 @pytest.mark.parametrize(
-    "over", [{"sample_rate": 44100}, {"actual_duration_seconds": 25.0}, {"bytes": 0}, {"audio_s3_key": "x.mp3"}]
+    "over", [{"status": "FAILED"}, {"base_music": None}]
 )
 def test_check_response_problems(over):
-    assert len(st.check_response({**GOOD, **over}, 30.0)) == 1
+    assert len(st.check_response({**GOOD, **over})) == 1
 
 
 def test_wait_success_after_polling():
