@@ -30,7 +30,7 @@ python -m venv .venv
 | 단계 | 명령 |
 |---|---|
 | ① 단위 테스트 | `.venv/Scripts/python -m pytest` |
-| ② 컨테이너 계약 | `docker build -f container/Dockerfile -t runiverse-music:local .` → `docker run -p 18080:8080 -e GENERATOR=fake -e STORAGE=local -e LOCAL_OUTPUT_DIR=/tmp/out runiverse-music:local serve` |
+| ② 컨테이너 계약 | `docker build -f container/Dockerfile -t runiverse-music:local .` → `docker run -p 18080:8080 -e ANALYZER=fake -e GENERATOR=fake -e STORAGE=local -e LOCAL_OUTPUT_DIR=/tmp/out runiverse-music:local serve` |
 | ③ Colab 실생성 | `notebooks/colab_verify.ipynb` |
 | ④ dev 스모크 | `python scripts/smoke_test.py --env dev` |
 
@@ -57,7 +57,7 @@ python -m venv .venv
 
 ## 📊 관측
 
-- 로그: CloudWatch `/aws/sagemaker/Endpoints/runiverse-music-dev` (요청당 JSON 한 줄, `request_id`로 검색)
+- 로그: CloudWatch `/aws/sagemaker/Endpoints/runiverse-music-dev` (요청당 JSON 한 줄, `record_card_id`로 검색)
 - 지표: `AWS/SageMaker` — `Invocations`, `ModelLatency`, `ApproximateBacklogSizePerInstance`
 - Grafana: 기존 Grafana에 CloudWatch 데이터 소스 추가 (기본 리전 서울), 새로고침 1~5분
 

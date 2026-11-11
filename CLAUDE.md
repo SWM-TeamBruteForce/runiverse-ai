@@ -15,12 +15,15 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 | AI-MUS-04 | 기본 음악 반영 | **30초**. 회고 분위기 반영, 공통 설정 유지 |
 | AI-MUS-05 | 사진 분석 | Qwen3-VL(이미지) → 장면·분위기·시간대·음악 단서 |
 | AI-MUS-06 | 사진별 음악 | 사진마다 **10초** 1개. 사진 단서 + 사용자 사진 캡션 + 회고 분위기 |
-| AI-MUS-07 | 결과 연결 | 기본 음악은 `card_id`, 사진별 음악은 `photo_id`로만 식별 |
+| AI-MUS-07 | 결과 연결 | 기본 음악은 `record_card_id`, 사진별 음악은 `photos` 배열 순서(`photo_index`)로 식별 |
 | AI-MUS-08 | 비동기 상태 | 생성 중(대기열 포함)·완료·실패 |
 | AI-MUS-09 | 보관·재생 | 접근 권한은 **백엔드** 책임 (presigned URL) |
 
 - **생성 요청은 카드당 1건** = Async 호출 1건. 사진별로 쪼개지 않는다
-- 호출 주체는 Spring Boot 백엔드. 앱은 엔드포인트를 직접 부르지 않는다
+- 호출 주체는 **AI 전용 서버**(별도 저장소). 앱·백엔드는 엔드포인트를 직접 부르지 않는다
+  - 백엔드 → Kafka 요청 토픽 → AI 서버가 S3에 입력 업로드 후 `InvokeEndpointAsync`
+  - SageMaker SNS 성공/실패 알림 → AI 서버 → Kafka 완료 토픽 → 백엔드
+  - 이 저장소는 SageMaker 컨테이너(`/invocations` 계약)만 담는다
 - **구현 현황**: 지금 코드는 `caption`·`bpm`·`duration`을 받아 음악 1개를 만드는 **단건 생성까지만** 있다. 카드 단위 파이프라인(Qwen3-VL 분석, 사진별 음악, 부분 실패)은 설계만 끝났고 미구현이다 → 설계 문서 2장의 🆕 파일들
 
 ## 2. 음악 생성 단계별 핵심사항
@@ -30,8 +33,9 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 카드 1건 처리 순서: **입력 검증 → 회고 해석 → 공통 설정 → 사진 분석 → caption 조립 → 생성 → 저장**. 분석을 모두 끝낸 뒤 생성으로 넘어간다(GPU 모델 전환 1회). 카드 안 연산은 순차 실행.
 
 **① 입력 검증**
-- 입력: `card_id` `runningRecordId` `activity`(카드 단위) `averagePaceSecondsPerKm`(초 정수) `review_text` `weather_code`(WMO 4677) `photos[]`(`photo_id` `image_s3_key` `user_caption`)
-- `photo_id` 중복, 사진이 있는데 `activity` 없음 → 400
+- 입력 (백엔드 협의 2026-11-11): `user_id` `record_card_id` `memo`(회고) `activity_type`(카드 단위) `running_summary`(`avg_pace` 초/km 정수, `weather_code` WMO 4677, 나머지 지표는 받기만 함) `photos[]`(`image_key` `caption`)
+- 사진에는 ID가 없다 → 배열 순서(0부터, `photo_index`)로 연결
+- 필수 필드 누락, 모르는 필드, 모르는 `activity_type`, 빈 `image_key` → 400
 
 **② 회고 해석** (`analyzer.py`, Qwen3-VL 텍스트)
 - `emotion_cue`: 한글 한 구절, **30자 이내**. 원문 표현 보관용
@@ -54,13 +58,13 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 **⑤ caption 조립** (`prompting.py`)
 - **영어.** 공통 스타일 문장 → 곡별 단서 → 출력 검증 순서
 - 기본 음악: 공통 스타일 + 활동 맥락 + `music_emotion_en` + `Instrumental, no vocals.`
-- 사진별 음악: 위 + 사진 장면·분위기 + `user_caption` 핵심 요약
+- 사진별 음악: 위 + 사진 장면·분위기 + 사진 `caption` 핵심 요약
 - 공통 스타일 문장은 모든 track에서 **동일**. 사진 분위기가 회고와 달라도 회고 여운을 빼지 않는다
 - 날씨는 실제로 알 때만 질감에 반영. 사진에 안 보이는 날씨를 장면으로 단정하지 않는다
 - BPM·조성·박자·길이는 caption에 쓰지 않고 **별도 파라미터**로 넘긴다
 - **512자 초과** → 사진 장면 설명부터 압축. 공통 스타일·회고 여운·연주곡 조건은 보존
 - 사진별 음악은 기본 음악을 편집하지 않고 **새로 생성**한다
-- seed: 기본은 요청 `seed`, 사진별은 `seed`+`photo_id`로 결정적 파생
+- seed: 요청에 없어 고정값 `42`(가정값). 사진별은 `42 + photo_index + 1`로 결정적 파생
 
 **⑥ 생성** (`generator.py`, ACE-Step 1.5 Turbo)
 - 모델은 컨테이너 시작 시 1회 로드, 요청마다 재사용. GPU 작업은 lock으로 직렬화
@@ -68,15 +72,29 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 - 성공 플래그가 있어도 파일 존재·0바이트를 따로 검사한다
 
 **⑦ 저장·응답** (`storage.py`, `pipeline.py`)
-- 경로: `music/cards/{card_id}/{request_id}/` 아래 `analysis.json` · `base.wav` · `photos/{photo_id}.wav`
-- `request_id`를 경로에 넣어 재시도 결과가 이전 결과를 덮어쓰지 않게 한다
+- 경로: `{OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/` 아래 `base.wav` · `photos/{photo_index}.wav`
+  - `OUTPUT_PREFIX`: test `audio/test` / prod `audio` (`deploy/envs/*.yaml`의 `container_env`)
+- 같은 카드를 다시 요청하면 같은 키를 덮어쓴다. 결과에는 사진마다 `photo_index`와 `image_key`를 함께 돌려준다
 - 분석 JSON을 생성 전에 먼저 저장한다 → 생성이 실패해도 분석은 남는다
 
 **오류 원칙**
-- HTTP 오류는 **요청이 잘못됐거나(400) 모델을 쓸 수 없을 때만**. 카드 안 항목 실패는 200 + `items[].status`
-- 사진 하나 실패 → 나머지 유지, `card_status=PARTIAL`. 기본 음악 실패 → `FAILED`
+- 응답 형식 정본: Notion「AI 기능 아키텍처 및 data 입출력」4.2 (컨테이너 결과 JSON). 4.1 Kafka 완료 메시지·4.3 `InvokeEndpointAsync` 호출 응답은 AI 서버 몫
+- **전체 성공/실패만 있다.** 성공만 HTTP 200 → `OutputLocation`(`async/outputs/`) + SNS 성공 토픽
+- 실패는 200이 아닌 코드 + `{"user_id", "record_card_id", "status": "FAILED", "error": {code, message}}` → `FailureLocation`(`async/failures/`) + SNS 실패 토픽
+
+| HTTP | `error.code` | 언제 |
+|---|---|---|
+| 400 | `INVALID_REQUEST` | 계약과 다른 입력. 필드별 오류는 `error.detail`, 못 읽으면 ID는 `null` |
+| 500 | `MUSIC_GENERATION_OOM` | 곡 생성 중 GPU 메모리 부족 |
+| 500 | `MUSIC_GENERATION_FAILED` | 그 밖의 곡 생성 실패 |
+| 502 | `MUSIC_UPLOAD_FAILED` | S3 업로드 실패 |
+| 500 | `INTERNAL_ERROR` | 예상 못 한 오류 |
+
+- 한 곡이라도 생성에 실패하면 아무것도 올리지 않는다 (같은 키의 이전 결과를 반쪽 묶음으로 덮어쓰지 않게)
+- `error.message`에는 실패한 곡(기본 음악·사진 순서)과 예외 종류만. 회고·캡션 원문 금지
+- 회고·사진 분석 실패는 오류가 아니다 → 기본값·사진 단서 없이 생성 계속
 - 모델 로드 실패 시 `/ping` 실패로 둔다. **CPU 대체 금지**
-- 컨테이너는 자동 재시도하지 않는다. 백엔드가 `targets`로 실패 항목만 재요청
+- 컨테이너·AI 서버 모두 자동 재시도하지 않는다. 실패는 사용자에게 알리고, 사용자가 재요청 버튼을 누르면 새 요청으로 큐에 다시 들어온다
 
 ## 3. 저장소 구조
 
@@ -141,7 +159,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 - 구현 전에 전제를 말한다. 해석이 갈리면 선택지를 제시하고, 불분명하면 멈추고 묻는다
 - 새 모듈은 Fake 구현과 함께 만든다. GPU 없이 테스트할 수 있어야 한다
 - 설정값은 `config.py`에서 검증한다. 잘못된 값이면 **시작 시 실패**
-- 로그는 단계마다 JSON 한 줄. `request_id`·`card_id`·`photo_id`·`stage`를 키로 둔다
+- 로그는 단계마다 JSON 한 줄. `record_card_id`·`photo_index`·`stage`를 키로 둔다
 - 문서는 개조식 핵심 위주. 서술형 문단 대신 불릿·표
 - 모르면 모른다고 한다. ACE-Step·Qwen3-VL에 없는 API를 만들어내지 않는다
 
@@ -165,7 +183,8 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 | **전처리 모듈 (입력·규칙표·caption 정본)** | `docs/AI_음악_전처리_모듈.md` (원본: Notion "Ace-Step 전처리 모듈") |
 | 설계 (아키텍처·요청·응답·오류·테스트) | `docs/superpowers/specs/2026-10-14-sagemaker-music-gen-design.md` |
 | 운영·배포 가이드 (스크립트 기준, Console 작업 시 값 참고용) | `README.md` |
+| 요청 파이프라인 (백엔드 ↔ Kafka ↔ AI 서버 ↔ SageMaker) | `docs/AI_음악_생성_요청_파이프라인.md` |
 
-**저장소 밖**: 앱 전체 기획·화면은 `../Docs/`, 앱 코드는 `../frontend/`. 베이스라인 노트북 원본은 Google Drive `Runiverse_ACE_Step_1_5_Colab_Python311_CUDA.ipynb`.
+**저장소 밖**: 앱 전체 기획·화면은 `../Docs/`, 앱 코드는 `../frontend/`. AI 전용 서버(Kafka ↔ SageMaker 중계)는 별도 저장소. 베이스라인 노트북 원본은 Google Drive `Runiverse_ACE_Step_1_5_Colab_Python311_CUDA.ipynb`.
 
 **미확정 정책**(공통 음악 스타일, 날씨 결측 시 조성, 사진 개수 상한, 재시도 횟수 등)은 기능명세 7장과 설계 11장에 있다. 가정값으로 구현할 때는 그 사실을 PR에 적는다.
