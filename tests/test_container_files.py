@@ -25,3 +25,19 @@ def test_dockerfile_disables_uv_cache():
     # uv 캐시가 이미지에 남으면 torch 휠이 이중 저장돼 0→1 콜드 스타트가 길어진다
     text = (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8")
     assert "UV_NO_CACHE=1" in text
+
+
+def test_dockerignore_allows_every_copy_source():
+    # .dockerignore는 허용 목록 방식 → Dockerfile에 COPY를 추가하고 여기를 빠뜨리면 빌드가 실패한다
+    allowed = {
+        line[1:].rstrip("/")
+        for line in (ROOT / ".dockerignore").read_text(encoding="utf-8").splitlines()
+        if line.startswith("!")
+    }
+    copies = [
+        line.split()[1:-1]
+        for line in (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8").splitlines()
+        if line.startswith("COPY ") and "--from=" not in line
+    ]
+    sources = {source.rstrip("/") for group in copies for source in group}
+    assert sources and sources <= allowed
