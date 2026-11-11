@@ -41,3 +41,10 @@ def test_dockerignore_allows_every_copy_source():
     ]
     sources = {source.rstrip("/") for group in copies for source in group}
     assert sources and sources <= allowed
+
+
+def test_image_tag_arg_is_declared_after_heavy_layers():
+    # 빌드 인자 값이 바뀌면 선언 이후 RUN이 모두 캐시를 잃는다 → 태그는 마지막 ENV 직전에 선언
+    lines = (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8").splitlines()
+    arg = lines.index("ARG IMAGE_TAG=local")
+    assert all(not line.startswith("RUN ") for line in lines[arg:])

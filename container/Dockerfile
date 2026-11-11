@@ -4,7 +4,6 @@ FROM nvidia/cuda:12.8.1-base-ubuntu22.04
 
 ARG ACESTEP_COMMIT=ca1e85fe9430179831e6bc6be790c332190a3866
 ARG ACESTEP_REPO=https://github.com/ace-step/ACE-Step-1.5.git
-ARG IMAGE_TAG=local
 
 # UV_NO_CACHE: 캐시가 이미지에 남으면 휠이 이중 저장돼 이미지·콜드 스타트가 커진다
 ENV DEBIAN_FRONTEND=noninteractive \
@@ -40,6 +39,9 @@ RUN uv pip install --python /opt/ace-step/.venv/bin/python --no-cache /opt/app
 COPY container/serve /usr/local/bin/serve
 RUN chmod +x /usr/local/bin/serve
 
+# IMAGE_TAG는 여기서 선언한다. 빌드 인자 값이 바뀌면 선언 아래의 RUN이 모두 캐시를 잃으므로,
+# 위에 두면 커밋(태그)마다 의존성 설치·수 GB 레이어 푸시를 다시 하게 된다
+ARG IMAGE_TAG=local
 ENV ACESTEP_ROOT=/opt/ace-step \
     ACESTEP_COMMIT=$ACESTEP_COMMIT \
     IMAGE_TAG=$IMAGE_TAG \
