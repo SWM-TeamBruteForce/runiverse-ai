@@ -21,12 +21,20 @@ def env_with(tmp_path, container_env=None, **changes):
 
 def test_repo_dev_yaml_loads():
     cfg = load_deploy_config("dev", REPO_ROOT)
-    assert cfg.endpoint_name == "runiverse-music-dev"
+    assert cfg.endpoint_name == "runiverse-music-test-v1"
     assert cfg.region == "ap-northeast-2"
     assert cfg.instance_type == "ml.g4dn.xlarge"
     assert (cfg.autoscaling.min_capacity, cfg.autoscaling.max_capacity) == (0, 1)
-    assert cfg.container_env["MAX_DURATION_SECONDS"] == "120"
-    assert cfg.bucket == ""
+    assert (cfg.bucket, cfg.s3_env) == ("<AI_BUCKET_TEST>", "test")
+    assert cfg.container_env["OUTPUT_PREFIX"] == "audio/test"
+    assert cfg.container_env["PHOTO_BUCKET"] == "<PHOTO_BUCKET_OLD_TEST>"
+
+
+def test_repo_prod_yaml_loads():
+    cfg = load_deploy_config("prod", REPO_ROOT)
+    assert (cfg.bucket, cfg.s3_env) == ("<AI_BUCKET_PROD>", "prod")
+    assert cfg.container_env["OUTPUT_PREFIX"] == "audio"
+    assert cfg.container_env["PHOTO_BUCKET"] == "<PHOTO_BUCKET_PROD>"
 
 
 def test_missing_env_file(tmp_path):
@@ -34,7 +42,7 @@ def test_missing_env_file(tmp_path):
         load_deploy_config("prod", tmp_path)
 
 
-@pytest.mark.parametrize("env", [{"GENERATOR": "fake"}, {"STORAGE": "local"}])
+@pytest.mark.parametrize("env", [{"ANALYZER": "fake"}, {"GENERATOR": "fake"}, {"STORAGE": "local"}])
 def test_rejects_test_only_modes(tmp_path, env):
     with pytest.raises(DeployConfigError, match="만 허용"):
         load_deploy_config("dev", env_with(tmp_path, container_env=env))
@@ -50,11 +58,12 @@ def test_unknown_key_rejected(tmp_path):
         load_deploy_config("dev", env_with(tmp_path, instanse_type="typo"))
 
 
-def test_require_deployable_lists_missing():
-    cfg = load_deploy_config("dev", REPO_ROOT)
+def test_require_deployable_lists_missing(tmp_path):
+    root = env_with(tmp_path, container_env={"PHOTO_BUCKET": ""}, bucket="", s3_env="",
+                    execution_role_arn="", model_data_url="")
     with pytest.raises(DeployConfigError) as info:
-        require_deployable(cfg)
-    for key in ("bucket", "execution_role_arn", "model_data_url"):
+        require_deployable(load_deploy_config("dev", root))
+    for key in ("bucket", "s3_env", "execution_role_arn", "model_data_url", "container_env.PHOTO_BUCKET"):
         assert key in str(info.value)
 
 

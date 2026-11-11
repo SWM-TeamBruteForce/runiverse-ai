@@ -58,8 +58,8 @@ def build_endpoint_config_request(cfg: DeployConfig, name: str, model_name: str)
     if cfg.inference_ami_version:
         variant["InferenceAmiVersion"] = cfg.inference_ami_version
     output = {
-        "S3OutputPath": f"s3://{cfg.bucket}/music/responses/",
-        "S3FailurePath": f"s3://{cfg.bucket}/music/failures/",
+        "S3OutputPath": f"s3://{cfg.bucket}/async/outputs/{cfg.s3_env}/",
+        "S3FailurePath": f"s3://{cfg.bucket}/async/failures/{cfg.s3_env}/",
     }
     notification = {}
     if cfg.sns_success_topic_arn:

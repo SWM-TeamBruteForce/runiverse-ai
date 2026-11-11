@@ -11,8 +11,9 @@ from pathlib import Path
 import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
-LOCKED_ENV = {"GENERATOR": "acestep", "STORAGE": "s3"}
-REQUIRED_FOR_DEPLOY = ("bucket", "execution_role_arn", "model_data_url")
+LOCKED_ENV = {"ANALYZER": "qwen", "GENERATOR": "acestep", "STORAGE": "s3"}
+REQUIRED_FOR_DEPLOY = ("bucket", "s3_env", "execution_role_arn", "model_data_url")
+REQUIRED_CONTAINER_ENV = ("PHOTO_BUCKET",)  # 없으면 컨테이너가 시작하면서 ConfigError로 종료
 
 
 class DeployConfigError(ValueError):
@@ -41,6 +42,7 @@ class DeployConfig:
     container_startup_health_check_timeout: int
     autoscaling: Autoscaling
     bucket: str
+    s3_env: str  # AI 버킷 async/ 경로의 env (Notion「S3 버킷 저장 구조」): test / prod
     execution_role_arn: str
     model_data_url: str
     sns_success_topic_arn: str
@@ -76,6 +78,7 @@ def load_deploy_config(env_name: str, root: Path = ROOT) -> DeployConfig:
 
 def require_deployable(cfg: DeployConfig) -> None:
     missing = [key for key in REQUIRED_FOR_DEPLOY if not getattr(cfg, key)]
+    missing += [f"container_env.{key}" for key in REQUIRED_CONTAINER_ENV if not cfg.container_env.get(key)]
     if missing:
         raise DeployConfigError(f"deploy/envs/{cfg.env_name}.yaml에 값을 채우세요: {', '.join(missing)}")
 

@@ -2,10 +2,25 @@ import json
 import tarfile
 
 import download_models as dm
+from runiverse_music.analyzer import QWEN_DIR
 
 
-def test_model_key():
-    assert dm.model_key("abc") == "music/models/ace-step-1.5/abc/model.tar.gz"
+def test_model_key_includes_both_model_revisions():
+    # Notion「S3 버킷 저장 구조」: models/{package}/{version}/model.tar.gz
+    key = dm.model_key("aaaaaaaaaa", "bbbbbbbbbb")
+    assert key == "models/runiverse-music/aaaaaaaa-bbbbbbbb/model.tar.gz"
+
+
+def test_download_snapshots_puts_qwen_where_analyzer_reads(tmp_path):
+    calls = []
+
+    dm.download_snapshots(tmp_path, "ace-rev", "qwen-rev", lambda **kwargs: calls.append(kwargs))
+
+    assert calls == [
+        {"repo_id": dm.REPO_ID, "revision": "ace-rev", "local_dir": str(tmp_path)},
+        {"repo_id": dm.QWEN_REPO_ID, "revision": "qwen-rev", "local_dir": str(tmp_path / QWEN_DIR)},
+    ]
+    assert dm.QWEN_REPO_ID == "Qwen/Qwen3-VL-2B-Instruct"
 
 
 def test_tarball_root_layout(tmp_path):
@@ -14,6 +29,9 @@ def test_tarball_root_layout(tmp_path):
     (ck / "acestep-v15-turbo" / "model.safetensors").write_bytes(b"w")
     (ck / ".cache" / "huggingface").mkdir(parents=True)
     (ck / ".cache" / "huggingface" / "meta").write_text("m")
+    (ck / "qwen3-vl" / ".cache" / "huggingface").mkdir(parents=True)  # Qwen 폴더 안의 HF 메타데이터도 제외
+    (ck / "qwen3-vl" / ".cache" / "huggingface" / "meta").write_text("m")
+    (ck / "qwen3-vl" / "model.safetensors").write_bytes(b"w")
     dm.write_revisions(ck, {dm.REPO_ID: "abc"})
 
     tar_path = tmp_path / "model.tar.gz"
@@ -24,6 +42,8 @@ def test_tarball_root_layout(tmp_path):
             "acestep-v15-turbo",
             "acestep-v15-turbo/model.safetensors",
             "model_revisions.json",
+            "qwen3-vl",
+            "qwen3-vl/model.safetensors",
         ]
         assert json.load(tar.extractfile("model_revisions.json")) == {dm.REPO_ID: "abc"}
 

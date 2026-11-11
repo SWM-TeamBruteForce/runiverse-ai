@@ -1,0 +1,59 @@
+# Runiverse AI 음악 생성 — 운영 배포 설정
+# 콘솔 배포 시 설정 기록용으로 사용
+# deploy.py 배포 시 스크립트가 읽는 값을 AWS에 적용
+# 콘솔에서 변경한 설정은 이 파일에도 수동 반영
+
+region: ap-northeast-2
+
+# 운영 실행 Role의 로그 권한: runiverse-music-prod-*와 일치
+endpoint_name: runiverse-music-prod-v1
+
+# 테스트·운영 공용 ECR 저장소
+# 실제 배포할 이미지 태그 또는 digest는 배포 시 별도 지정
+ecr_repository: runiverse-music-inference
+
+# 인스턴스·동시 처리
+instance_type: ml.g4dn.xlarge
+initial_instance_count: 1
+max_concurrent_invocations_per_instance: 1
+
+# 모델 다운로드·압축 해제 및 컨테이너 준비 제한 시간(초)
+model_data_download_timeout: 600
+container_startup_health_check_timeout: 600
+
+# 초기 운영 구성: 최대 1대, 요청이 없으면 0대까지 축소
+autoscaling:
+  min_capacity: 0
+  max_capacity: 1
+  target_backlog_per_instance: 1.0
+  scale_in_cooldown: 600
+  scale_out_cooldown: 300
+
+# 필수: IAM 정책에 지정한 실제 운영 AI 버킷 이름
+bucket: <AI_BUCKET_PROD>
+# async/inputs·outputs·failures 경로의 env
+s3_env: prod
+
+# 운영 전용 SageMaker 실행 Role
+execution_role_arn: arn:aws:iam::<ACCOUNT_ID>:role/<SAGEMAKER_PROD_ROLE>
+
+# 필수: 테스트에서 검증하고 운영 버킷에 업로드한 가중치 경로
+# 형식: s3://실제-운영-AI-버킷/models/버전/model.tar.gz
+model_data_url: ""
+
+# 선택: 운영용 SNS 토픽 ARN. 빈 값이면 알림 비활성화
+# 토픽 이름은 runiverse-music-prod-* 형식 사용
+sns_success_topic_arn: ""
+sns_error_topic_arn: ""
+
+# 드라이버 호환 문제로 특정 AMI 버전이 필요할 때 지정
+inference_ami_version: ""
+
+container_env:
+  OUTPUT_PREFIX: audio  # 운영은 env 없이 audio/{user_id}/...
+  PHOTO_BUCKET: <PHOTO_BUCKET_PROD>  # 사진 원본을 읽는 기존 사진 버킷
+  MAX_DURATION_SECONDS: "120"
+  INFERENCE_STEPS: "8"
+  OFFLOAD_TO_CPU: "true"
+  AUDIO_FORMAT: wav
+  LOG_LEVEL: INFO

@@ -17,7 +17,7 @@ def make_cfg(**over):
         ecr_repository="runiverse-music", instance_type="ml.g4dn.xlarge",
         initial_instance_count=1, max_concurrent_invocations_per_instance=1,
         model_data_download_timeout=600, container_startup_health_check_timeout=600,
-        autoscaling=Autoscaling(0, 1, 1.0, 600, 300), bucket="bkt",
+        autoscaling=Autoscaling(0, 1, 1.0, 600, 300), bucket="bkt", s3_env="test",
         execution_role_arn="arn:aws:iam::123456789012:role/sm",
         model_data_url="s3://bkt/music/models/ace-step-1.5/rev/model.tar.gz",
         sns_success_topic_arn="", sns_error_topic_arn="", inference_ami_version="",
@@ -92,8 +92,8 @@ def test_endpoint_config_without_optional():
     assert "InferenceAmiVersion" not in variant
     assert req["AsyncInferenceConfig"]["ClientConfig"] == {"MaxConcurrentInvocationsPerInstance": 1}
     assert req["AsyncInferenceConfig"]["OutputConfig"] == {
-        "S3OutputPath": "s3://bkt/music/responses/",
-        "S3FailurePath": "s3://bkt/music/failures/",
+        "S3OutputPath": "s3://bkt/async/outputs/test/",
+        "S3FailurePath": "s3://bkt/async/failures/test/",
     }
 
 
@@ -175,6 +175,8 @@ def test_deploy_recreates_failed_endpoint():
     assert ("get_waiter", {"name": "endpoint_deleted"}) in sm.calls
 
 
-def test_main_rejects_unfilled_config(capsys):
+def test_main_rejects_unfilled_config(capsys, monkeypatch):
+    # 저장소의 dev.yaml은 채워져 있으므로 비어 있는 설정을 넣어 거부를 확인한다 (AWS 호출 전에 멈춰야 함)
+    monkeypatch.setattr(deploy, "load_deploy_config", lambda env: make_cfg(model_data_url=""))
     assert deploy.main(["--env", "dev", "--image-uri", IMAGE]) == 2
-    assert "bucket" in capsys.readouterr().err
+    assert "model_data_url" in capsys.readouterr().err
