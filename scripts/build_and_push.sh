@@ -23,6 +23,9 @@ aws ecr describe-repositories --repository-names "$REPO" --region "$REGION" >/de
   || aws ecr create-repository --repository-name "$REPO" --region "$REGION" >/dev/null
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 
-docker build --platform linux/amd64 -f container/Dockerfile --build-arg IMAGE_TAG="$TAG" -t "$IMAGE" .
+# --provenance·--sbom=false: Docker Desktop 기본값은 OCI 이미지 인덱스로 푸시 → SageMaker가 거부
+# (Unsupported manifest media type application/vnd.oci.image.index.v1+json)
+docker build --platform linux/amd64 --provenance=false --sbom=false \
+  -f container/Dockerfile --build-arg IMAGE_TAG="$TAG" -t "$IMAGE" .
 docker push "$IMAGE"
 echo "$IMAGE"

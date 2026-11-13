@@ -48,3 +48,9 @@ def test_image_tag_arg_is_declared_after_heavy_layers():
     lines = (ROOT / "container" / "Dockerfile").read_text(encoding="utf-8").splitlines()
     arg = lines.index("ARG IMAGE_TAG=local")
     assert all(not line.startswith("RUN ") for line in lines[arg:])
+
+
+def test_build_script_pushes_single_manifest():
+    # SageMaker는 OCI 이미지 인덱스를 거부한다 → 출처 정보(provenance·sbom) 없이 단일 이미지로 빌드
+    text = (ROOT / "scripts" / "build_and_push.sh").read_text(encoding="utf-8")
+    assert "--provenance=false" in text and "--sbom=false" in text
