@@ -50,7 +50,9 @@ def test_image_tag_arg_is_declared_after_heavy_layers():
     assert all(not line.startswith("RUN ") for line in lines[arg:])
 
 
-def test_build_script_pushes_single_manifest():
-    # SageMaker는 OCI 이미지 인덱스를 거부한다 → 출처 정보(provenance·sbom) 없이 단일 이미지로 빌드
+def test_build_script_pushes_docker_v2_manifest():
+    # SageMaker는 OCI 이미지 인덱스·OCI 매니페스트를 거부한다 → 출처 정보 없이 Docker v2 형식으로 푸시
     text = (ROOT / "scripts" / "build_and_push.sh").read_text(encoding="utf-8")
     assert "--provenance=false" in text and "--sbom=false" in text
+    assert "oci-mediatypes=false" in text
+    assert "docker push" not in text  # buildx --output이 푸시까지 한다

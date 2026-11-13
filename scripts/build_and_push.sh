@@ -23,9 +23,13 @@ aws ecr describe-repositories --repository-names "$REPO" --region "$REGION" >/de
   || aws ecr create-repository --repository-name "$REPO" --region "$REGION" >/dev/null
 aws ecr get-login-password --region "$REGION" | docker login --username AWS --password-stdin "$REGISTRY"
 
-# --provenance·--sbom=false: Docker Desktop 기본값은 OCI 이미지 인덱스로 푸시 → SageMaker가 거부
-# (Unsupported manifest media type application/vnd.oci.image.index.v1+json)
-docker build --platform linux/amd64 --provenance=false --sbom=false \
-  -f container/Dockerfile --build-arg IMAGE_TAG="$TAG" -t "$IMAGE" .
-docker push "$IMAGE"
+# SageMaker Model은 Docker v2 매니페스트만 받는다. Docker Desktop(containerd 저장소)의 build·push는 OCI 형식이라 거부됨
+#   --provenance·--sbom=false: 출처 정보가 붙은 OCI 이미지 인덱스(oci.image.index) 방지
+#   oci-mediatypes=false:      단일 이미지도 OCI 매니페스트(oci.image.manifest) 대신 Docker v2로 푸시
+# ECR 태그가 immutable이라 같은 태그가 이미 있으면 push가 실패한다 → Console에서 기존 이미지 삭제 후 재실행
+docker buildx build --platform linux/amd64 --provenance=false --sbom=false \
+  -f container/Dockerfile --build-arg IMAGE_TAG="$TAG" \
+  --output "type=registry,name=$IMAGE,oci-mediatypes=false" .
+# MediaType이 application/vnd.docker.distribution.manifest.v2+json 이어야 Model 생성 가능
+docker buildx imagetools inspect "$IMAGE" | head -5
 echo "$IMAGE"
