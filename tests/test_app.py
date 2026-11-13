@@ -73,7 +73,7 @@ def test_invocation_returns_card_result(settings):
     data = r.json()
     assert (data["record_card_id"], data["status"], data["error"]) == (101, "SUCCEEDED", None)
     assert data["base_music"]["s3_key"] == BASE_KEY
-    assert [p["photo_index"] for p in data["photo_music"]] == [0]
+    assert [(p["record_card_image_id"], p["photo_index"]) for p in data["photo_music"]] == [(201, 0)]
     assert data["manifest"]["prompt_mapping_version"] == "v1"
     assert (settings.local_output_dir / BASE_KEY).is_file()
 
@@ -99,7 +99,8 @@ def test_invalid_request_body_keeps_ids_when_readable(settings):
     [
         card(activity_type="RUN"),
         card(bpm=170),
-        card(photos=[{"caption": "image_key 없음"}]),
+        card(photos=[{"record_card_image_id": 1, "caption": "image_key 없음"}]),
+        card(photos=[{"image_key": "k"}]),  # record_card_image_id 없음
         {k: v for k, v in CARD.items() if k != "user_id"},
     ],
 )

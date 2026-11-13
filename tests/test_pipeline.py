@@ -81,7 +81,7 @@ def test_review_model_error_falls_back_to_default():
 
 def test_failed_photo_keeps_card_and_drops_photo_cue():
     missing = "cards/101/photos/202.jpg"
-    photos = [PHOTO, {**PHOTO, "image_key": missing}]
+    photos = [PHOTO, {**PHOTO, "record_card_image_id": 202, "image_key": missing}]
 
     def read_photo(key):
         return read_fail(key) if key == missing else b"jpg"
@@ -150,9 +150,9 @@ def test_failed_track_keeps_others_and_logs_type_only(tmp_path, caplog):
     assert (log["stage"], log["photo_index"], log["error"]) == ("generation", 0, "CudaOutOfMemory")
 
 
-# ── 저장·결과 ({prefix}/{user_id}/{activity_type}/{record_card_id}/base|photos/{순서}.wav + 곡별 상태) ──
+# ── 저장·결과 ({prefix}/{user_id}/{activity_type}/{record_card_id}/base|{record_card_image_id}.wav + 곡별 상태) ──
 BASE_KEY = "audio/test/123/TRAVEL/101/base.wav"
-PHOTO_KEY = "audio/test/123/TRAVEL/101/photos/0.wav"
+PHOTO_KEY = "audio/test/123/TRAVEL/101/201.wav"
 
 
 def local_storage(tmp_path):
@@ -184,7 +184,8 @@ def test_run_card_success_matches_contract(tmp_path):
         },
         "base_music": {"s3_key": BASE_KEY, "duration_seconds": 1.0},
         "photo_music": [
-            {"photo_index": 0, "image_key": PHOTO["image_key"], "s3_key": PHOTO_KEY, "duration_seconds": 1.0},
+            {"record_card_image_id": 201, "photo_index": 0, "image_key": PHOTO["image_key"],
+             "s3_key": PHOTO_KEY, "duration_seconds": 1.0},
         ],
         "error": None,
         "manifest": {

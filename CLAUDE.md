@@ -15,7 +15,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 | AI-MUS-04 | 기본 음악 반영 | **30초**. 회고 분위기 반영, 공통 설정 유지 |
 | AI-MUS-05 | 사진 분석 | Qwen3-VL(이미지) → 장면·분위기·시간대·음악 단서 |
 | AI-MUS-06 | 사진별 음악 | 사진마다 **10초** 1개. 사진 단서 + 사용자 사진 캡션 + 회고 분위기 |
-| AI-MUS-07 | 결과 연결 | 기본 음악은 `record_card_id`, 사진별 음악은 `photos` 배열 순서(`photo_index`)로 식별 |
+| AI-MUS-07 | 결과 연결 | 기본 음악은 `record_card_id`, 사진별 음악은 `photos[].record_card_image_id`로 식별 |
 | AI-MUS-08 | 비동기 상태 | 생성 중(대기열 포함)·완료·실패 |
 | AI-MUS-09 | 보관·재생 | 접근 권한은 **백엔드** 책임 (presigned URL) |
 
@@ -33,9 +33,9 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 카드 1건 처리 순서: **입력 검증 → 회고 해석 → 공통 설정 → 사진 분석 → caption 조립 → 생성 → 저장**. 분석을 모두 끝낸 뒤 생성으로 넘어간다(GPU 모델 전환 1회). 카드 안 연산은 순차 실행.
 
 **① 입력 검증**
-- 입력 (백엔드 협의 2026-11-11): `user_id` `record_card_id` `memo`(회고) `activity_type`(카드 단위) `running_summary`(`avg_pace` 초/km 정수, `weather_code` WMO 4677, 나머지 지표는 받기만 함) `photos[]`(`image_key` `caption`)
-- 사진에는 ID가 없다 → 배열 순서(0부터, `photo_index`)로 연결
-- 필수 필드 누락, 모르는 필드, 모르는 `activity_type`, 빈 `image_key` → 400
+- 입력 (백엔드 협의 2026-11-11): `user_id` `record_card_id` `memo`(회고) `activity_type`(카드 단위) `running_summary`(`avg_pace` 초/km 정수, `weather_code` WMO 4677, 나머지 지표는 받기만 함) `photos[]`(`record_card_image_id` `image_key` `caption`)
+- 사진은 `record_card_image_id`(필수, 요청 안에서 중복 불가)로 결과와 연결한다. 배열 순서(0부터, `photo_index`)는 seed 파생·로그용
+- 필수 필드 누락, 모르는 필드, 모르는 `activity_type`, 빈 `image_key`, 중복 `record_card_image_id` → 400
 
 **② 회고 해석** (`analyzer.py`, Qwen3-VL 텍스트)
 - `emotion_cue`: 한글 한 구절, **30자 이내**. 원문 표현 보관용
@@ -72,9 +72,9 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 - 성공 플래그가 있어도 파일 존재·0바이트를 따로 검사한다
 
 **⑦ 저장·응답** (`storage.py`, `pipeline.py`)
-- 경로: `{OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/` 아래 `base.wav` · `photos/{photo_index}.wav`
+- 경로: `{OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/` 아래 `base.wav` · `{record_card_image_id}.wav`
   - `OUTPUT_PREFIX`: test `audio/test` / prod `audio` (`deploy/envs/*.yaml`의 `container_env`)
-- 같은 카드를 다시 요청하면 같은 키를 덮어쓴다. 결과에는 사진마다 `photo_index`와 `image_key`를 함께 돌려준다
+- 같은 카드를 다시 요청하면 같은 키를 덮어쓴다. 결과에는 사진마다 `record_card_image_id`·`photo_index`·`image_key`를 함께 돌려준다
 - 분석 JSON을 생성 전에 먼저 저장한다 → 생성이 실패해도 분석은 남는다
 
 **오류 원칙**

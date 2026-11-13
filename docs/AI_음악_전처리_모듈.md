@@ -23,10 +23,11 @@
 | `running_summary.avg_pace` | BPM 결정 | 초/km (`5:20` → `320`). 없거나 잘못되면 대체 규칙 |
 | `running_summary.weather_code` | 조성(`keyscale`) 선택 | WMO Code Table 4677 `ww` 코드 (0~99) |
 | `running_summary`의 나머지 지표 | 러닝 맥락 보조 입력 | 현재 매핑에 쓰지 않음 (받기만 함) |
+| `photos[].record_card_image_id` | 백엔드 사진 ID. 결과 `photo_music[]`에 그대로 돌려주고 사진 곡 파일명에 사용 | 필수, 숫자. 한 요청 안에서 중복 불가 |
 | `photos[].image_key` | 분석할 원본 사진의 S3 객체 키 | 필수 |
 | `photos[].caption` | 사진별 사용자 설명 해석 | 미작성 시 `null` |
 
-- 사진에는 별도 ID가 없다. **`photos` 배열 순서(0부터)** 로 사진과 음악 결과를 연결한다
+- 백엔드는 **`record_card_image_id`** 로 사진과 음악 결과를 연결한다. `photos` 배열 순서(0부터, `photo_index`)는 seed 파생에 쓴다
 
 ```json
 {
@@ -46,6 +47,7 @@
   },
   "photos": [
     {
+      "record_card_image_id": 201,
       "image_key": "cards/101/photos/201.jpg",
       "caption": "바닷가에서 찍은 사진"
     }
@@ -92,7 +94,7 @@
 - `shared`는 **모든 track에 똑같이** 적용 → 한 번의 러닝이라는 연결감
 - track마다 다른 것은 `duration`과 `caption_input`뿐
 - `photo_index`: 요청 `photos` 배열 순서. 사진 곡 seed도 이 순서로 파생 (`DEFAULT_SEED + photo_index + 1`)
-- 생성 음악 저장 키 (AI 버킷): `{OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/base.wav`, 사진 곡은 `.../photos/{photo_index}.wav`
+- 생성 음악 저장 키 (AI 버킷): `{OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/base.wav`, 사진 곡은 `.../{record_card_image_id}.wav`
   - test: `OUTPUT_PREFIX=audio/test` / prod: `OUTPUT_PREFIX=audio`
   - 같은 카드를 다시 요청하면 같은 키를 덮어쓴다
 - `caption_input`에는 활동 맥락과 곡별 분위기만. BPM·조성·박자는 문장에 반복하지 않는다
@@ -240,6 +242,6 @@ an open, airy coastal scene.
 
 | 항목 | 내용 |
 |---|---|
-| 사진 순서 안정성 | 사진 ID가 없어 배열 순서로 연결 → 재요청 사이에 사진을 지우거나 순서를 바꾸면 `photos/{순서}.wav`가 다른 사진을 가리키고, 사진 수가 줄면 이전 파일이 남는다 |
+| 삭제된 사진 파일 | 파일명이 사진 ID라 순서가 바뀌어도 같은 키를 가리킨다. 재요청 사이에 삭제된 사진의 이전 음악 파일은 남는다 |
 | 기본 날씨 그룹 | 날씨 결측 시 쓸 그룹 미지정 |
 | `activity` 코드 목록 | 원본에는 "대문자 코드"만 있음. `DAILY`/`TRAVEL`/`RACE`는 이전 개정본 기준 |

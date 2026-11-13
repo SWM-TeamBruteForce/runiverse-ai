@@ -63,10 +63,10 @@ def test_make_storage_local(tmp_path):
 
 
 def test_music_key_follows_s3_contract():
-    # {OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/base.wav | photos/{배열 순서}.wav
+    # {OUTPUT_PREFIX}/{user_id}/{activity_type}/{record_card_id}/base.wav | {record_card_image_id}.wav
     assert music_key("audio/test", 123, "TRAVEL", 101, None) == "audio/test/123/TRAVEL/101/base.wav"
-    assert music_key("audio", 123, "TRAVEL", 101, 0) == "audio/123/TRAVEL/101/photos/0.wav"  # prod
-    assert music_key("/audio/test/", 1, "RACE", 2, 3) == "audio/test/1/RACE/2/photos/3.wav"
+    assert music_key("audio", 123, "TRAVEL", 101, 201) == "audio/123/TRAVEL/101/201.wav"  # prod
+    assert music_key("/audio/test/", 1, "RACE", 2, 3) == "audio/test/1/RACE/2/3.wav"
 
 
 def test_s3_storage_reads_photo_from_photo_bucket():

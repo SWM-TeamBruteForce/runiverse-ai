@@ -23,6 +23,7 @@ CARD = {
     },
     "photos": [
         {
+            "record_card_image_id": 201,
             "image_key": "cards/101/photos/201.jpg",
             "caption": "바닷가에서 찍은 사진",
         }
@@ -39,7 +40,7 @@ def test_parses_doc_example():
     assert (req.record_card_id, req.activity_type, req.running_summary.avg_pace, req.running_summary.weather_code) == (
         101, "TRAVEL", 360, 61,
     )
-    assert req.photos[0].image_key == "cards/101/photos/201.jpg"
+    assert (req.photos[0].record_card_image_id, req.photos[0].image_key) == (201, "cards/101/photos/201.jpg")
 
 
 def test_optional_texts_and_metrics_may_be_null_or_missing():
@@ -55,10 +56,22 @@ def test_photos_default_to_empty():
     assert CardRequest.model_validate(data).photos == []
 
 
-@pytest.mark.parametrize("photo", [{"caption": "키 없음"}, {"image_key": ""}, {"image_key": "k", "photo_id": 1}])
+@pytest.mark.parametrize("photo", [
+    {"record_card_image_id": 1, "caption": "키 없음"},
+    {"record_card_image_id": 1, "image_key": ""},
+    {"image_key": "k"},                                   # 사진 ID 누락
+    {"record_card_image_id": "abc", "image_key": "k"},
+    {"record_card_image_id": 1, "image_key": "k", "photo_id": 1},
+])
 def test_rejects_invalid_photo(photo):
     with pytest.raises(ValidationError):
         CardRequest.model_validate(card(photos=[photo]))
+
+
+def test_rejects_duplicate_photo_ids():
+    photo = CARD["photos"][0]
+    with pytest.raises(ValidationError, match="중복"):
+        CardRequest.model_validate(card(photos=[photo, {**photo, "image_key": "cards/101/photos/202.jpg"}]))
 
 
 @pytest.mark.parametrize("activity", ["travel", "RUN", None])

@@ -135,7 +135,9 @@ def run_card(
     items = []
     for result in results:
         track = result.track
-        key = music_key(output_prefix, card.user_id, card.activity_type, card.record_card_id, track.photo_index)
+        photo = None if track.photo_index is None else card.photos[track.photo_index]
+        image_id = None if photo is None else photo.record_card_image_id
+        key = music_key(output_prefix, card.user_id, card.activity_type, card.record_card_id, image_id)
         started = time.perf_counter()
         try:
             storage.upload(result.audio.audio_path, key)
@@ -144,8 +146,9 @@ def run_card(
             raise CardFailure(502, "MUSIC_UPLOAD_FAILED", f"음악 저장 실패: {_label(track)}({type(exc).__name__})") from exc
         item = {"s3_key": key, "duration_seconds": round(result.audio.actual_duration_seconds, 2)}
         if track.type == "PHOTO":
-            # 사진 ID가 없어 배열 순서와 원본 사진 키를 함께 돌려준다 → 백엔드가 어느 사진의 음악인지 확인
-            item = {"photo_index": track.photo_index, "image_key": card.photos[track.photo_index].image_key, **item}
+            # 백엔드는 record_card_image_id로 사진과 연결하고, 배열 순서·원본 키로 대조한다
+            item = {"record_card_image_id": image_id, "photo_index": track.photo_index,
+                    "image_key": photo.image_key, **item}
         _log_stage("upload", card.record_card_id, track.photo_index, _since(started))
         items.append(item)
 
