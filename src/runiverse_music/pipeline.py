@@ -38,7 +38,7 @@ class Track:
 
 @dataclass(frozen=True)
 class CardPlan:
-    record_card_id: int
+    record_card_id: str
     mapping_version: str
     shared: SharedParams
     review_analysis: ReviewAnalysis
@@ -231,14 +231,14 @@ def _since(started: float) -> float:
     return round(time.perf_counter() - started, 2)
 
 
-def _timed(stage: str, record_card_id: int, fn) -> None:
+def _timed(stage: str, record_card_id: str, fn) -> None:
     """실패하면 예외를 그대로 올린다 (GPU 이동 실패는 카드 처리를 이어 갈 수 없다)."""
     started = time.perf_counter()
     fn()
     _log_stage(stage, record_card_id, None, _since(started))
 
 
-def _log_stage(stage: str, record_card_id: int, photo_index: int | None, seconds: float,
+def _log_stage(stage: str, record_card_id: str, photo_index: int | None, seconds: float,
                error: str | None = None, **extra) -> None:
     """단계마다 JSON 한 줄 → CloudWatch Logs. 성공 stage_done(INFO), 실패 stage_failed(WARNING).
 

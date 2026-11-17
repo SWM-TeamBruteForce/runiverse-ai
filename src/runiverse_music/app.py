@@ -106,7 +106,7 @@ def memory_gib() -> dict[str, float]:
     return {names[key]: round(value / 2**20, 2) for key, value in kib.items()}
 
 
-def _ids_from(body: bytes) -> tuple[int | None, int | None]:
+def _ids_from(body: bytes) -> tuple[str | None, str | None]:
     """형식이 틀린 요청에서도 읽을 수 있으면 user_id·record_card_id를 꺼낸다 (실패 JSON 연결용)."""
     try:
         data = json.loads(body)
@@ -114,7 +114,7 @@ def _ids_from(body: bytes) -> tuple[int | None, int | None]:
         return None, None
     if not isinstance(data, dict):
         return None, None
-    pick = lambda key: data.get(key) if isinstance(data.get(key), int) else None  # noqa: E731
+    pick = lambda key: data.get(key) if isinstance(data.get(key), str) else None  # noqa: E731
     return pick("user_id"), pick("record_card_id")
 
 

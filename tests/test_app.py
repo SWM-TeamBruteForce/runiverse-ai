@@ -10,9 +10,9 @@ from runiverse_music.app import build_app, create_app
 from runiverse_music.config import load_settings
 from runiverse_music.generator import FakeGenerator, GenerationError
 from runiverse_music.storage import LocalStorage, StorageError
-from test_card_request import CARD, card
+from test_card_request import CARD, CARD_ID, PHOTO_ID, USER, card
 
-BASE_KEY = "music/outputs/123/TRAVEL/101/base.wav"
+BASE_KEY = f"music/outputs/{USER}/TRAVEL/{CARD_ID}/base.wav"
 
 
 @pytest.fixture
@@ -71,9 +71,9 @@ def test_invocation_returns_card_result(settings):
         r = post(client, card())
     assert r.status_code == 200
     data = r.json()
-    assert (data["record_card_id"], data["status"], data["error"]) == (101, "SUCCEEDED", None)
+    assert (data["record_card_id"], data["status"], data["error"]) == (CARD_ID, "SUCCEEDED", None)
     assert data["base_music"]["s3_key"] == BASE_KEY
-    assert [(p["record_card_image_id"], p["photo_index"]) for p in data["photo_music"]] == [(201, 0)]
+    assert [(p["record_card_image_id"], p["photo_index"]) for p in data["photo_music"]] == [(PHOTO_ID, 0)]
     assert data["manifest"]["prompt_mapping_version"] == "v1"
     assert (settings.local_output_dir / BASE_KEY).is_file()
 
@@ -90,7 +90,7 @@ def test_invalid_request_body_keeps_ids_when_readable(settings):
         r = post(client, card(activity_type="RUN"))
     assert r.status_code == 400
     body = r.json()
-    assert (body["user_id"], body["record_card_id"], body["status"]) == (123, 101, "FAILED")
+    assert (body["user_id"], body["record_card_id"], body["status"]) == (USER, CARD_ID, "FAILED")
     assert body["error"]["detail"][0]["loc"] == ["activity_type"]
 
 
@@ -99,7 +99,7 @@ def test_invalid_request_body_keeps_ids_when_readable(settings):
     [
         card(activity_type="RUN"),
         card(bpm=170),
-        card(photos=[{"record_card_image_id": 1, "caption": "image_key 없음"}]),
+        card(photos=[{"record_card_image_id": PHOTO_ID, "caption": "image_key 없음"}]),
         card(photos=[{"image_key": "k"}]),  # record_card_image_id 없음
         {k: v for k, v in CARD.items() if k != "user_id"},
     ],
@@ -127,7 +127,7 @@ def test_track_failure_is_500_with_code(settings):
         r = post(client, card())
     assert r.status_code == 500  # 실패는 200이 아님 → FailureLocation(async/failures/)
     assert r.json() == {
-        "user_id": 123, "record_card_id": 101, "status": "FAILED",
+        "user_id": USER, "record_card_id": CARD_ID, "status": "FAILED",
         "error": {"code": "MUSIC_GENERATION_FAILED",
                   "message": "음악 생성 실패: 기본 음악(GenerationError), 사진 0(GenerationError)"},
     }

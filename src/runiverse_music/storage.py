@@ -18,8 +18,8 @@ class StorageError(RuntimeError):
     """사진 읽기·결과 업로드 실패."""
 
 
-def music_key(prefix: str, user_id: int, activity: str, record_card_id: int,
-              record_card_image_id: int | None) -> str:
+def music_key(prefix: str, user_id: str, activity: str, record_card_id: str,
+              record_card_image_id: str | None) -> str:
     """카드 음악 객체 키. 기본 음악은 base.wav, 사진 음악은 {record_card_image_id}.wav.
 
     파일명이 사진 ID라 재요청 사이에 사진 순서가 바뀌어도 같은 사진은 같은 키를 가리킨다.

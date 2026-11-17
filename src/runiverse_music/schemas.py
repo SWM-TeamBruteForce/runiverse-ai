@@ -1,8 +1,14 @@
 """카드 입력 형식. 정본: docs/AI_음악_전처리_모듈.md 1장."""
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from typing import Annotated
+
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints, field_validator
 
 from runiverse_music import mapping_rules as rules
+
+# 백엔드 ID는 UUID 문자열 (2026-11-17). S3 키에 들어가므로 모양만 확인하고 값은 받은 그대로 쓴다
+BackendId = Annotated[str, StringConstraints(
+    strict=True, pattern=r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")]
 
 
 class PhotoInput(BaseModel):
@@ -10,7 +16,7 @@ class PhotoInput(BaseModel):
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    record_card_image_id: int             # 백엔드 사진 ID. 해석하지 않고 결과에 그대로 돌려준다
+    record_card_image_id: BackendId       # 백엔드 사진 ID. 해석하지 않고 결과에 그대로 돌려준다
     image_key: str = Field(min_length=1)  # 분석할 원본 사진의 S3 키
     caption: str | None = None            # 사용자 사진 설명
 
@@ -26,8 +32,8 @@ class RunningSummary(BaseModel):
 class CardRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
-    user_id: int
-    record_card_id: int
+    user_id: BackendId
+    record_card_id: BackendId
     memo: str | None = None  # 회고 글
     activity_type: str
     running_summary: RunningSummary

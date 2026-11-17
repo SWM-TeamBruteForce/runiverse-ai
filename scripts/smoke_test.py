@@ -10,19 +10,21 @@ import json
 import sys
 import time
 import uuid
-from datetime import datetime, timezone
 
 from deploy_config import load_deploy_config
 
-def input_key(s3_env: str, record_card_id: int, inference_id: str) -> str:
+def input_key(s3_env: str, record_card_id: str, inference_id: str) -> str:
     """입력 JSON 키 (Notion「S3 버킷 저장 구조」6장). 호출마다 InferenceId가 달라 재요청이 이전 입력을 덮어쓰지 않는다."""
     return f"async/inputs/{s3_env}/{record_card_id}/{inference_id}.json"
 
 
-def build_request(record_card_id: int) -> dict:
-    """사진 없는 카드 1건. ID는 스모크 전용 값이라 실제 사용자와 겹치지 않게 user_id=0."""
+SMOKE_USER_ID = "00000000-0000-4000-8000-000000000000"  # 스모크 전용. 실제 사용자 UUID와 겹치지 않는다
+
+
+def build_request(record_card_id: str) -> dict:
+    """사진 없는 카드 1건. ID는 백엔드처럼 UUID 문자열 (2026-11-17)."""
     return {
-        "user_id": 0,
+        "user_id": SMOKE_USER_ID,
         "record_card_id": record_card_id,
         "memo": None,
         "activity_type": "DAILY",
@@ -91,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     s3 = session.client("s3")
     runtime = session.client("sagemaker-runtime")
 
-    record_card_id = int(f"{datetime.now(timezone.utc):%Y%m%d%H%M%S}")  # 스모크 전용 카드 ID
+    record_card_id = str(uuid.uuid4())  # 스모크 전용 카드 ID
     inference_id = uuid.uuid4().hex  # 실제 서비스에서는 AI 서버가 호출마다 만든다
     request_key = input_key(cfg.s3_env, record_card_id, inference_id)
     s3.put_object(Bucket=cfg.bucket, Key=request_key, Body=json.dumps(build_request(record_card_id)).encode(),

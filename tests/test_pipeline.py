@@ -8,7 +8,7 @@ import pytest
 from runiverse_music.pipeline import CardFailure, generate_tracks, music_jobs, plan_card, run_card
 from runiverse_music.schemas import CardRequest
 from runiverse_music.storage import LocalStorage, StorageError
-from test_card_request import CARD, card
+from test_card_request import CARD, CARD_ID, PHOTO_ID, USER, card
 
 PHOTO = CARD["photos"][0]
 
@@ -37,7 +37,7 @@ def plan(data=None, analyzer=None, read_photo=read_ok):
 
 def test_plan_matches_doc_output_shape():
     assert plan() == {
-        "record_card_id": 101,
+        "record_card_id": CARD_ID,
         "mapping_version": "v1",
         "shared": {"bpm": 160, "keyscale": "E Major", "timesignature": "4", "instrumental": True},
         "review_analysis": {
@@ -81,7 +81,7 @@ def test_review_model_error_falls_back_to_default():
 
 def test_failed_photo_keeps_card_and_drops_photo_cue():
     missing = "cards/101/photos/202.jpg"
-    photos = [PHOTO, {**PHOTO, "record_card_image_id": 202, "image_key": missing}]
+    photos = [PHOTO, {**PHOTO, "record_card_image_id": "5a6b7c8d-3333-4eee-afff-000000000202", "image_key": missing}]
 
     def read_photo(key):
         return read_fail(key) if key == missing else b"jpg"
@@ -151,8 +151,8 @@ def test_failed_track_keeps_others_and_logs_type_only(tmp_path, caplog):
 
 
 # ── 저장·결과 ({prefix}/{user_id}/{activity_type}/{record_card_id}/base|{record_card_image_id}.wav + 곡별 상태) ──
-BASE_KEY = "audio/test/123/TRAVEL/101/base.wav"
-PHOTO_KEY = "audio/test/123/TRAVEL/101/201.wav"
+BASE_KEY = f"audio/test/{USER}/TRAVEL/{CARD_ID}/base.wav"
+PHOTO_KEY = f"audio/test/{USER}/TRAVEL/{CARD_ID}/{PHOTO_ID}.wav"
 
 
 def local_storage(tmp_path):
@@ -174,8 +174,8 @@ def test_run_card_success_matches_contract(tmp_path):
     # Notion「AI 기능 아키텍처 및 data 입출력」4.1
     result = run(tmp_path)
     assert result == {
-        "user_id": 123,
-        "record_card_id": 101,
+        "user_id": USER,
+        "record_card_id": CARD_ID,
         "status": "SUCCEEDED",
         "review_mood": {
             "emotion_direction": "성취·환희",
@@ -184,7 +184,7 @@ def test_run_card_success_matches_contract(tmp_path):
         },
         "base_music": {"s3_key": BASE_KEY, "duration_seconds": 1.0},
         "photo_music": [
-            {"record_card_image_id": 201, "photo_index": 0, "image_key": PHOTO["image_key"],
+            {"record_card_image_id": PHOTO_ID, "photo_index": 0, "image_key": PHOTO["image_key"],
              "s3_key": PHOTO_KEY, "duration_seconds": 1.0},
         ],
         "error": None,

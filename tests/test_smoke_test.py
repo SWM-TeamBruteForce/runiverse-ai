@@ -42,8 +42,9 @@ GOOD = {"status": "SUCCEEDED", "base_music": {"s3_key": "audio/test/0/DAILY/1/ba
 
 
 def test_build_request_is_valid():
-    req = CardRequest.model_validate_json(json.dumps(st.build_request(1)))
-    assert (req.record_card_id, req.activity_type, req.photos) == (1, "DAILY", [])
+    card_id = "0c9d8e7f-2222-4ccc-9ddd-000000000101"  # 백엔드처럼 UUID 문자열
+    req = CardRequest.model_validate_json(json.dumps(st.build_request(card_id)))
+    assert (req.record_card_id, req.activity_type, req.photos) == (card_id, "DAILY", [])
 
 
 def test_input_key_groups_by_card_and_inference_id():
