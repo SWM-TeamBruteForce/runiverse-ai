@@ -80,7 +80,7 @@ inference_ami_version: ""
 
 container_env:
   OUTPUT_PREFIX: audio/test  # 실행 Role의 audio/* 쓰기 권한과 일치
-  PHOTO_BUCKET: <PHOTO_BUCKET_LOCAL>  # 사진 원본을 읽는 기존 사진 버킷
+  PHOTO_BUCKET: <PHOTO_BUCKET_TEST>  # 기록 카드 사진 원본 버킷 (백엔드 확인 2026-11-18)
   INFERENCE_STEPS: "8"
   OFFLOAD_TO_CPU: "true"
   AUDIO_FORMAT: wav

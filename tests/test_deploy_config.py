@@ -27,7 +27,7 @@ def test_repo_dev_yaml_loads():
     assert (cfg.autoscaling.min_capacity, cfg.autoscaling.max_capacity) == (0, 1)
     assert (cfg.bucket, cfg.s3_env) == ("<AI_BUCKET_TEST>", "test")
     assert cfg.container_env["OUTPUT_PREFIX"] == "audio/test"
-    assert cfg.container_env["PHOTO_BUCKET"] == "<PHOTO_BUCKET_LOCAL>"
+    assert cfg.container_env["PHOTO_BUCKET"] == "<PHOTO_BUCKET_TEST>"
 
 
 def test_repo_prod_yaml_loads():
