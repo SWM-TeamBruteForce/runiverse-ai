@@ -109,7 +109,6 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 | `container/` | `Dockerfile`, `serve` 진입점 (uvicorn 8080, 워커 1개) |
 | `scripts/` | `download_models`(HF→S3 `model.tar.gz`) `build_and_push.sh`(ECR) `deploy` `deploy_config` `smoke_test` |
 | `deploy/envs/dev.yaml` | dev 배포 설정. **값 변경은 재배포만으로 반영** |
-| `notebooks/` | `baseline_colab`(기존 베이스라인 보관) `colab_verify`(Colab GPU 실생성 검증) |
 | `tests/` | pytest. GPU 없이 돈다 |
 | `docs/` | 기능명세, 전처리 모듈, 설계 (`docs/superpowers/specs/`) |
 
@@ -143,7 +142,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 |---|---|---|
 | ① 단위 테스트 | 로컬 pytest | 로직·검증·매핑·응답 |
 | ② 컨테이너 계약 | 로컬 Docker (`fake`·`local`) | Dockerfile·진입점·포트·응답 형식 |
-| ③ 실생성·품질 | Colab T4 | 모델 실경로, 분석 품질, VRAM·시간 |
+| ③ 실생성·품질 | Colab T4 (노트북은 로컬 보관, git 제외) | 모델 실경로, 분석 품질, VRAM·시간 |
 | ④ 스모크 | dev 엔드포인트, Console (**과금**) | 드라이버·콜드 스타트·Async·SNS |
 
 - ④는 엔드포인트 수정 1회에 10분 이상 걸리고 비용이 든다. Console에서 개발자가 직접 호출·확인한다 (S3 입력 업로드 → 엔드포인트 테스트 → 출력·CloudWatch 로그 확인)

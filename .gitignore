@@ -8,6 +8,6 @@ build/
 dist/
 .superpowers/
 
-# 로컬 전용 (원격에 올리지 않음): 실험 노트북, 앱 화면 시안(사진·음원 포함)
-notebooks/new_baseline_colab.ipynb
+# 로컬 전용 (원격에 올리지 않음): Colab 노트북(SageMaker 동작 확인 후 로컬 보관, 2026-11-18), 앱 화면 시안(사진·음원 포함)
+notebooks/
 prototype/

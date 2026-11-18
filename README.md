@@ -14,7 +14,6 @@ Runiverse 음악 생성(ACE-Step 1.5 Turbo) — SageMaker Async 엔드포인트 
 | `container/` | Dockerfile, `serve` 진입점 |
 | `scripts/` | 모델 패키징·이미지 푸시·배포·스모크 |
 | `deploy/envs/dev.yaml` | dev 배포 설정 (재배포만으로 반영) |
-| `notebooks/` | 베이스라인, Colab 검증 |
 
 ## 🛠️ 로컬 준비
 
@@ -31,7 +30,7 @@ python -m venv .venv
 |---|---|
 | ① 단위 테스트 | `.venv/Scripts/python -m pytest` |
 | ② 컨테이너 계약 | `docker build -f container/Dockerfile -t runiverse-music:local .` → `docker run -p 18080:8080 -e ANALYZER=fake -e GENERATOR=fake -e STORAGE=local -e LOCAL_OUTPUT_DIR=/tmp/out runiverse-music:local serve` |
-| ③ Colab 실생성 | `notebooks/colab_verify.ipynb` |
+| ③ Colab 실생성 | 로컬 노트북 (저장소 밖, SageMaker 동작 확인 후 dev 스모크로 대체) |
 | ④ dev 스모크 | `python scripts/smoke_test.py --env dev` |
 
 **② 컨테이너 계약 참고**
