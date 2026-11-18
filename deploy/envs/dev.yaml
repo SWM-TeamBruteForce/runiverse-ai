@@ -43,7 +43,7 @@ endpoint_name: runiverse-music-test-v1
 ecr_repository: runiverse-music-inference
 
 # 인스턴스·동시 처리
-instance_type: ml.g4dn.xlarge
+instance_type: ml.g4dn.2xlarge  # RAM 32GB. xlarge(16GB)는 시작 중 메모리 부족으로 종료 (2026-11-17)
 initial_instance_count: 1
 max_concurrent_invocations_per_instance: 1
 
@@ -80,8 +80,7 @@ inference_ami_version: ""
 
 container_env:
   OUTPUT_PREFIX: audio/test  # 실행 Role의 audio/* 쓰기 권한과 일치
-  PHOTO_BUCKET: <PHOTO_BUCKET_OLD_TEST>  # 사진 원본을 읽는 기존 사진 버킷
-  MAX_DURATION_SECONDS: "120"
+  PHOTO_BUCKET: <PHOTO_BUCKET_LOCAL>  # 사진 원본을 읽는 기존 사진 버킷
   INFERENCE_STEPS: "8"
   OFFLOAD_TO_CPU: "true"
   AUDIO_FORMAT: wav

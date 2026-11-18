@@ -23,11 +23,11 @@ def test_repo_dev_yaml_loads():
     cfg = load_deploy_config("dev", REPO_ROOT)
     assert cfg.endpoint_name == "runiverse-music-test-v1"
     assert cfg.region == "ap-northeast-2"
-    assert cfg.instance_type == "ml.g4dn.xlarge"
+    assert cfg.instance_type == "ml.g4dn.2xlarge"  # xlarge(RAM 16GB)는 시작 중 메모리 부족
     assert (cfg.autoscaling.min_capacity, cfg.autoscaling.max_capacity) == (0, 1)
     assert (cfg.bucket, cfg.s3_env) == ("<AI_BUCKET_TEST>", "test")
     assert cfg.container_env["OUTPUT_PREFIX"] == "audio/test"
-    assert cfg.container_env["PHOTO_BUCKET"] == "<PHOTO_BUCKET_OLD_TEST>"
+    assert cfg.container_env["PHOTO_BUCKET"] == "<PHOTO_BUCKET_LOCAL>"
 
 
 def test_repo_prod_yaml_loads():
