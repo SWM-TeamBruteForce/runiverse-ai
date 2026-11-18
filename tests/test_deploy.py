@@ -176,7 +176,7 @@ def test_deploy_recreates_failed_endpoint():
 
 
 def test_main_rejects_unfilled_config(capsys, monkeypatch):
-    # 저장소의 dev.yaml은 채워져 있으므로 비어 있는 설정을 넣어 거부를 확인한다 (AWS 호출 전에 멈춰야 함)
+    # 로컬 dev.local.yaml이 있으면 채워지므로 비어 있는 설정을 넣어 거부를 확인한다 (AWS 호출 전에 멈춰야 함)
     monkeypatch.setattr(deploy, "load_deploy_config", lambda env: make_cfg(model_data_url=""))
     assert deploy.main(["--env", "dev", "--image-uri", IMAGE]) == 2
     assert "model_data_url" in capsys.readouterr().err

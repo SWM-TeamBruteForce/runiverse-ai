@@ -12,7 +12,7 @@ Runiverse 음악 생성(ACE-Step 1.5 Turbo) — SageMaker Async 엔드포인트 
 | `src/runiverse_music/` | 서빙 코드 (`/ping`, `/invocations`) |
 | `container/` | Dockerfile, `serve` 진입점 |
 | `scripts/` | 모델 패키징·이미지 푸시·배포·스모크 |
-| `deploy/envs/dev.yaml` | dev 배포 설정 (재배포만으로 반영) |
+| `deploy/envs/dev.yaml` | dev 배포 설정 (재배포만으로 반영). 계정별 값은 `dev.local.yaml` (git 제외) |
 
 ## 🛠️ 로컬 준비
 
@@ -43,7 +43,7 @@ python -m venv .venv
 
 > 사전: AWS CLI 로그인, Docker Desktop, venv 활성화(`source .venv/Scripts/activate`)
 
-1. `deploy/envs/dev.yaml`에 `bucket`·`execution_role_arn`·(선택) SNS 토픽 입력
+1. `deploy/envs/dev.local.yaml`(git 제외)에 `bucket`·`execution_role_arn`·`model_data_url`·`container_env.PHOTO_BUCKET` 입력 (공개 저장소라 `dev.yaml`에는 넣지 않음)
 2. 가중치: `python scripts/download_models.py --env dev` → 출력 URI를 `model_data_url`에 입력
 3. 이미지: `scripts/build_and_push.sh dev` → 마지막 줄 이미지 URI 복사
 4. 미리보기: `python scripts/deploy.py --env dev --image-uri <URI> --dry-run`

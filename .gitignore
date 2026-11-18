@@ -7,6 +7,8 @@ __pycache__/
 build/
 dist/
 .superpowers/
+# 계정별 배포 값 (공개 저장소에 올리지 않음)
+deploy/envs/*.local.yaml
 # 설계·계획 작업 문서 (로컬 보관, 2026-11-18)
 docs/superpowers/
 

@@ -60,15 +60,15 @@ autoscaling:
   scale_out_cooldown: 300
 
 # 필수: IAM 정책에 지정한 실제 테스트 AI 버킷 이름 입력
-bucket: <AI_BUCKET_TEST>
+bucket: ""  # 계정별 값은 dev.local.yaml (git 제외)
 # async/inputs·outputs·failures 경로의 env (로컬·테스트가 버킷을 공유)
 s3_env: test
 
-execution_role_arn: arn:aws:iam::<ACCOUNT_ID>:role/<SAGEMAKER_TEST_ROLE>
+execution_role_arn: ""  # dev.local.yaml
 
 # 필수: download_models.py 출력값 입력
 # 형식: s3://실제-테스트-AI-버킷/models/버전/model.tar.gz
-model_data_url: s3://<AI_BUCKET_TEST>/models/runiverse-music/19671f40-89644892/model.tar.gz
+model_data_url: ""  # dev.local.yaml
 
 # 선택: 생성한 테스트 SNS 토픽 ARN 입력. 빈 값이면 알림 비활성화
 # 토픽 이름은 runiverse-music-test-* 형식 사용
@@ -80,7 +80,7 @@ inference_ami_version: ""
 
 container_env:
   OUTPUT_PREFIX: audio/test  # 실행 Role의 audio/* 쓰기 권한과 일치
-  PHOTO_BUCKET: <PHOTO_BUCKET_TEST>  # 기록 카드 사진 원본 버킷 (백엔드 확인 2026-11-18)
+  PHOTO_BUCKET: ""  # 기록 카드 사진 원본 버킷 → dev.local.yaml
   INFERENCE_STEPS: "8"
   OFFLOAD_TO_CPU: "true"
   AUDIO_FORMAT: wav

@@ -108,7 +108,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 | `src/runiverse_music/` | 서빙 코드. `app`(`/ping`·`/invocations`) `config` `schemas` `generator` `storage` |
 | `container/` | `Dockerfile`, `serve` 진입점 (uvicorn 8080, 워커 1개) |
 | `scripts/` | `download_models`(HF→S3 `model.tar.gz`) `build_and_push.sh`(ECR) `deploy` `deploy_config` `smoke_test` |
-| `deploy/envs/dev.yaml` | dev 배포 설정. **값 변경은 재배포만으로 반영** |
+| `deploy/envs/dev.yaml` | dev 배포 설정. **값 변경은 재배포만으로 반영**. 계정별 값(버킷·실행 역할 ARN·모델 위치·사진 버킷)은 `dev.local.yaml`(git 제외)에 둔다 |
 | `tests/` | pytest. GPU 없이 돈다 |
 | `docs/` | 기능명세, 전처리 모듈, 요청 파이프라인 (설계 `docs/superpowers/`는 로컬 보관, git 제외) |
 
@@ -166,6 +166,8 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 
 ### Don't
 
+- **공개 저장소다.** AWS 계정 ID·역할 ARN·버킷 이름·내부 IP를 커밋하지 않는다. 계정별 값은 `deploy/envs/<env>.local.yaml`(git 제외)에만 둔다
+- push·PR 전 보안 점검 없이 올리기 — 공개 여부 확인, 올라갈 커밋 범위에서 비밀값·인프라 값 검색, 원격 브랜치·PR 상태 확인
 - 요청 없이 이 파일 수정 — 새 규칙이 필요하면 수정안만 제안한다
 - 요청하지 않은 기능·추상화·설정 추가, 안 고장난 것 리팩터링
 - `generator.py`(예정: `analyzer.py`) 밖에서 torch·acestep·transformers import

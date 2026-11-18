@@ -30,12 +30,12 @@ autoscaling:
   scale_out_cooldown: 300
 
 # 필수: IAM 정책에 지정한 실제 운영 AI 버킷 이름
-bucket: <AI_BUCKET_PROD>
+bucket: ""  # 계정별 값은 prod.local.yaml (git 제외)
 # async/inputs·outputs·failures 경로의 env
 s3_env: prod
 
 # 운영 전용 SageMaker 실행 Role
-execution_role_arn: arn:aws:iam::<ACCOUNT_ID>:role/<SAGEMAKER_PROD_ROLE>
+execution_role_arn: ""  # prod.local.yaml
 
 # 필수: 테스트에서 검증하고 운영 버킷에 업로드한 가중치 경로
 # 형식: s3://실제-운영-AI-버킷/models/버전/model.tar.gz
@@ -51,7 +51,7 @@ inference_ami_version: ""
 
 container_env:
   OUTPUT_PREFIX: audio  # 운영은 env 없이 audio/{user_id}/...
-  PHOTO_BUCKET: <PHOTO_BUCKET_PROD>  # 사진 원본을 읽는 기존 사진 버킷
+  PHOTO_BUCKET: ""  # 사진 원본 버킷 → prod.local.yaml
   MAX_DURATION_SECONDS: "120"
   INFERENCE_STEPS: "8"
   OFFLOAD_TO_CPU: "true"

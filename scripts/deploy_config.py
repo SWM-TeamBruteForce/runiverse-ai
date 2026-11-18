@@ -1,5 +1,8 @@
 """deploy/envs/<env>.yaml 로더. 배포 스크립트 공용.
 
+계정별 값(버킷·실행 역할 ARN·모델 위치·사진 버킷)은 공개 저장소에 두지 않는다.
+deploy/envs/<env>.local.yaml(git 제외)이 있으면 그 값으로 덮어쓴다 (container_env는 키 단위로 합침).
+
 사용: python scripts/deploy_config.py dev region  → 값 출력
 """
 from __future__ import annotations
@@ -63,6 +66,12 @@ def load_deploy_config(env_name: str, root: Path = ROOT) -> DeployConfig:
     if not path.is_file():
         raise DeployConfigError(f"설정 파일이 없습니다: {path}")
     raw = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    local_path = path.with_name(f"{env_name}.local.yaml")
+    if local_path.is_file():
+        local = yaml.safe_load(local_path.read_text(encoding="utf-8")) or {}
+        local_env = local.pop("container_env", None) or {}
+        raw.update(local)
+        raw["container_env"] = {**(raw.get("container_env") or {}), **local_env}
     try:
         autoscaling = Autoscaling(**raw.pop("autoscaling"))
         container_env = {str(k): _env_value(v) for k, v in (raw.pop("container_env") or {}).items()}
@@ -80,7 +89,8 @@ def require_deployable(cfg: DeployConfig) -> None:
     missing = [key for key in REQUIRED_FOR_DEPLOY if not getattr(cfg, key)]
     missing += [f"container_env.{key}" for key in REQUIRED_CONTAINER_ENV if not cfg.container_env.get(key)]
     if missing:
-        raise DeployConfigError(f"deploy/envs/{cfg.env_name}.yaml에 값을 채우세요: {', '.join(missing)}")
+        raise DeployConfigError(
+            f"deploy/envs/{cfg.env_name}.local.yaml(git 제외)에 값을 채우세요: {', '.join(missing)}")
 
 
 def main(argv: list[str]) -> int:
