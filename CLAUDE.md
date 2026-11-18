@@ -152,6 +152,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 - 커밋: `<type>: <설명>` — **type 앞에 이모지가 붙는다.** `📍 Feat` `🔨 Fix` `📝 Docs` `🎨 Style` `🤖 Refactor` `✅ Test` `🚚 Chore` `✂️ Remove` `🔧 Rename` (frontend와 동일)
 - 브랜치: `<type>/<domain>` 소문자 kebab-case (`feat/music-gen-serving`)
 - **PR의 base는 `dev`.** 원격은 `upstream`=SWM-TeamBruteForce/runiverse-ai, `origin`=개인 fork
+- 팀 원격(`upstream`)에는 **`main`·`dev`만** 둔다. 작업 브랜치는 `origin`(개인 fork)에 push → 팀 `dev`로 PR (`--head jihwanjo-98:<브랜치>`). 병합은 개발자가 한다
 - 한 커밋에 논리적 변경 하나. 각 커밋에서 pytest가 통과하는지 본다
 - **AI를 공동 작성자로 넣지 않는다.** `Co-Authored-By: Claude` 트레일러, `🤖 Generated with` 푸터 모두 금지
 
