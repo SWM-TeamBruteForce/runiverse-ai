@@ -85,7 +85,7 @@
       "type": "PHOTO",
       "photo_index": 0,
       "duration": 10.0,
-      "caption_input": "An instrumental piece reflecting a run while traveling and an open, airy coastal scene."
+      "caption_input": "An open, airy coastal scene, an instrumental piece from a run while traveling."
     }
   ]
 }
@@ -191,21 +191,22 @@
 | 활동유형 | 카드의 러닝 맥락 반영 | 동일한 카드 활동 맥락 반영 |
 | 회고 분위기 | Qwen3-VL의 `music_cue_en` 반영 | caption에 **반복해서 넣지 않음** |
 | 사진 장면·분위기 | 사용하지 않음 | Qwen3-VL이 추출한 사진 단서 반영 |
-| 사용자 사진 캡션 | 사용하지 않음 | 사진의 맥락을 확인하는 데 사용 |
+| 사용자 사진 캡션 | 사용하지 않음 | Qwen3-VL 사진 분석의 맥락으로만 사용. caption에 **직접 넣지 않음** |
 | 장르·악기 | 미리 지정하지 않음 | 미리 지정하지 않음 |
 | 연주곡 조건 | `instrumental=true`, `lyrics="[Instrumental]"` | 동일 |
 
 ```txt
-활동 맥락 + 회고 글의 음악적 여운
-→ 기본 음악 caption_input
-
-활동 맥락 + 사진 장면·분위기 + 사용자 사진 캡션의 핵심
-→ 해당 사진 음악 caption_input
+기본 음악:  An instrumental piece reflecting {활동 맥락} and {회고 music_cue_en}.
+사진 음악:  {사진 music_cue_en}, an instrumental piece from {활동 맥락}.
+단서 없음:  An instrumental piece reflecting {활동 맥락}.   (회고 미작성·분석 실패)
 ```
 
 - Qwen3-VL은 완성된 caption이나 장르를 쓰지 않는다. 한국어 회고·사진 캡션을 이해하고 **짧은 영어 음악 단서**만 출력한다. 별도 번역 모델 없음
+- 사진 단서는 **사진에 보이는 장면을 근거**로 하고, 사용자 캡션은 맥락 확인에만 쓴다 (분석 프롬프트 규칙). 사용자 문장은 caption_input에 그대로 들어가지 않는다
+- 사진 단서를 문장 맨 앞에 두어 같은 카드의 사진 곡끼리 구분되게 한다
+- 회고 감정은 공통 조성으로 모든 곡에 반영되므로 사진 곡 caption에는 반복하지 않는다
 - `bpm`·`keyscale`·`timesignature`·`duration`은 caption에 쓰지 않고 **별도 파라미터**로 전달
-- **512자 이내** 검증. 줄여야 하면 부수적인 장면 설명부터 압축, **활동 맥락·곡별 핵심 분위기**는 보존
+- **512자 이내** 검증. 넘으면 분위기 단서를 뒤에서부터 단어 단위로 줄이고, **활동 맥락**은 보존
 
 ### 예시
 
@@ -218,8 +219,8 @@ An instrumental piece reflecting a run while traveling and
 quiet pride after a difficult finish.
 
 바다 사진 caption_input — 10초:
-An instrumental piece reflecting a run while traveling and
-an open, airy coastal scene.
+An open, airy coastal scene, an instrumental piece from
+a run while traveling.
 ```
 
 ## 🤖 7. ACE-Step 5Hz LM 적용
