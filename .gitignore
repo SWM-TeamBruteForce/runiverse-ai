@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.model_build/
+*.egg-info/
+build/
+dist/
+.superpowers/
+# 계정별 배포 값 (공개 저장소에 올리지 않음)
+deploy/envs/*.local.yaml
+# 설계·계획 작업 문서 (로컬 보관, 2026-11-18)
+docs/superpowers/
+
+# 로컬 전용 (원격에 올리지 않음): Colab 노트북(SageMaker 동작 확인 후 로컬 보관, 2026-11-18), 앱 화면 시안(사진·음원 포함)
+notebooks/
+prototype/

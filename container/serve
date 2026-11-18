@@ -1,0 +1,5 @@
+#!/bin/sh
+# SageMaker는 `docker run <image> serve`로 이 파일을 실행한다.
+set -e
+exec python -m uvicorn runiverse_music.app:build_app --factory \
+  --host 0.0.0.0 --port 8080 --workers 1 --timeout-keep-alive 75

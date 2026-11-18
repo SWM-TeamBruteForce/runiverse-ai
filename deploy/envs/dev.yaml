@@ -1,0 +1,87 @@
+# # runiverse-music dev 배포 초기 설정 — deploy.py 실행 시 읽음 (값 변경 후 재배포만 하면 반영)
+# region: ap-northeast-2      # 서울
+# endpoint_name: runiverse-music-dev
+# ecr_repository: runiverse-music
+# instance_type: ml.g4dn.xlarge
+# initial_instance_count: 1
+# max_concurrent_invocations_per_instance: 1
+# model_data_download_timeout: 600
+# container_startup_health_check_timeout: 600
+# autoscaling:
+#   min_capacity: 0
+#   max_capacity: 1
+#   target_backlog_per_instance: 1.0
+#   scale_in_cooldown: 600
+#   scale_out_cooldown: 300
+
+# # ▼ AWS 리소스 생성 후 입력 (bucket·execution_role_arn·model_data_url 비어 있으면 배포 거부)
+# bucket: ""
+# execution_role_arn: ""
+# model_data_url: ""          # download_models.py 출력값
+# sns_success_topic_arn: ""   # 비우면 알림 없음
+# sns_error_topic_arn: ""
+# inference_ami_version: ""   # 드라이버 호환 문제 시 지정
+
+# container_env:
+#   OUTPUT_PREFIX: music/outputs
+#   MAX_DURATION_SECONDS: "120"
+#   INFERENCE_STEPS: "8"
+#   OFFLOAD_TO_CPU: "true"
+#   AUDIO_FORMAT: wav
+#   LOG_LEVEL: INFO
+
+# ------------------------------------------------
+
+
+# Runiverse AI 음악 생성 — 개발/테스트 배포 설정
+# deploy.py가 이 파일을 읽어 AWS 리소스를 생성·갱신
+
+region: ap-northeast-2
+
+# 실행 Role의 로그 권한: runiverse-music-test-*와 일치
+endpoint_name: runiverse-music-test-v1
+ecr_repository: runiverse-music-inference
+
+# 인스턴스·동시 처리
+instance_type: ml.g4dn.2xlarge  # RAM 32GB. xlarge(16GB)는 시작 중 메모리 부족으로 종료 (2026-11-17)
+initial_instance_count: 1
+max_concurrent_invocations_per_instance: 1
+
+# 모델 다운로드·압축 해제 및 컨테이너 준비 제한 시간(초)
+model_data_download_timeout: 600
+container_startup_health_check_timeout: 600
+
+# 비동기 엔드포인트 오토스케일링
+autoscaling:
+  min_capacity: 0
+  max_capacity: 1
+  target_backlog_per_instance: 1.0
+  scale_in_cooldown: 600
+  scale_out_cooldown: 300
+
+# 필수: IAM 정책에 지정한 실제 테스트 AI 버킷 이름 입력
+bucket: ""  # 계정별 값은 dev.local.yaml (git 제외)
+# async/inputs·outputs·failures 경로의 env (로컬·테스트가 버킷을 공유)
+s3_env: test
+
+execution_role_arn: ""  # dev.local.yaml
+
+# 필수: download_models.py 출력값 입력
+# 형식: s3://실제-테스트-AI-버킷/models/버전/model.tar.gz
+model_data_url: ""  # dev.local.yaml
+
+# 선택: 생성한 테스트 SNS 토픽 ARN 입력. 빈 값이면 알림 비활성화
+# 토픽 이름은 runiverse-music-test-* 형식 사용
+sns_success_topic_arn: ""
+sns_error_topic_arn: ""
+
+# 드라이버 호환 문제로 특정 AMI 버전이 필요할 때 지정
+inference_ami_version: ""
+
+container_env:
+  OUTPUT_PREFIX: audio/test  # 실행 Role의 audio/* 쓰기 권한과 일치
+  PHOTO_BUCKET: ""  # 기록 카드 사진 원본 버킷 → dev.local.yaml
+  INFERENCE_STEPS: "8"
+  OFFLOAD_TO_CPU: "true"
+  AUDIO_FORMAT: wav
+  LOG_LEVEL: INFO

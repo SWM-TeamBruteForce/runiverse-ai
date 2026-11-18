@@ -1,0 +1,10 @@
+# 빌드 컨텍스트는 container/Dockerfile이 COPY하는 파일만 보낸다 (허용 목록 방식)
+# → .model_build(모델 가중치 수십 GB)·.venv·prototype·노트북·문서·테스트·.git이 이미지와 전송에서 빠진다
+# Dockerfile에 COPY를 추가하면 여기에도 ! 줄을 추가해야 한다
+*
+!pyproject.toml
+!README.md
+!src/
+!container/serve
+**/__pycache__
+**/*.pyc
