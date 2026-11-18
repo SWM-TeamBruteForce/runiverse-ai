@@ -110,7 +110,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 | `scripts/` | `download_models`(HF→S3 `model.tar.gz`) `build_and_push.sh`(ECR) `deploy` `deploy_config` `smoke_test` |
 | `deploy/envs/dev.yaml` | dev 배포 설정. **값 변경은 재배포만으로 반영** |
 | `tests/` | pytest. GPU 없이 돈다 |
-| `docs/` | 기능명세, 전처리 모듈, 설계 (`docs/superpowers/specs/`) |
+| `docs/` | 기능명세, 전처리 모듈, 요청 파이프라인 (설계 `docs/superpowers/`는 로컬 보관, git 제외) |
 
 - **torch·acestep import는 `generator.py` 메서드 안에서만.** (예정: torch·transformers는 `analyzer.py`만) → 나머지는 GPU 없이 테스트 가능
 - 테스트·로컬 검증용 대체 구현: `GENERATOR=fake` · `STORAGE=local` (예정: `ANALYZER=fake`)
@@ -182,7 +182,7 @@ SageMaker Async 엔드포인트(BYOC 컨테이너)로 dev 배포한다. 당분�
 |---|---|
 | **기능명세 (정본)** | `docs/AI_러닝_음악_기능명세.md` |
 | **전처리 모듈 (입력·규칙표·caption 정본)** | `docs/AI_음악_전처리_모듈.md` (원본: Notion "Ace-Step 전처리 모듈") |
-| 설계 (아키텍처·요청·응답·오류·테스트) | `docs/superpowers/specs/2026-10-14-sagemaker-music-gen-design.md` |
+| 설계 (아키텍처·요청·응답·오류·테스트) | `docs/superpowers/specs/2026-10-14-sagemaker-music-gen-design.md` (로컬 보관, git 제외) |
 | 운영·배포 가이드 (스크립트 기준, Console 작업 시 값 참고용) | `README.md` |
 | 요청 파이프라인 (백엔드 ↔ Kafka ↔ AI 서버 ↔ SageMaker) | `docs/AI_음악_생성_요청_파이프라인.md` |
 
